@@ -11,6 +11,16 @@
 # cluster) makes the cert-manager controller error trying to watch Gateways.
 crds:
   enabled: true
+# Chart defaults allow metrics and health from any source, and egress to
+# 80, 443, and DNS. 443 covers the EKS API and ACME.
+networkPolicy:
+  enabled: true
+webhook:
+  networkPolicy:
+    enabled: true
+cainjector:
+  networkPolicy:
+    enabled: true
 config:
   apiVersion: controller.config.cert-manager.io/v1alpha1
   kind: ControllerConfiguration
@@ -23,3 +33,10 @@ config:
   enableGatewayAPIListenerSet: true
   featureGates:
     ListenerSets: true
+
+# cert-manager v1.20.2: prometheus.servicemonitor (lowercase).
+# PodMonitor and ServiceMonitor are mutually exclusive in this chart.
+prometheus:
+  enabled: true
+  servicemonitor:
+    enabled: true

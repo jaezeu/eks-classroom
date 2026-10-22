@@ -12,7 +12,6 @@ Regenerate:  python3 bootstrap_flow.py  ->  ../images/bootstrap-flow.png
 from diagrams import Cluster, Diagram, Edge
 from diagrams.aws.compute import EKS, EC2
 from diagrams.aws.security import IAMRole
-from diagrams.k8s.compute import Pod
 from diagrams.k8s.others import CRD
 from diagrams.onprem.iac import Terraform
 from diagrams.onprem.ci import GithubActions
@@ -67,10 +66,6 @@ with Diagram(
     gha >> role
     role >> Edge(label="standard") >> s_tf
     role >> Edge(label="cilium") >> c_tf1
-
-    workloads = Pod("workloads\nwordpress + postgres")
-    s_addons >> Edge(style="dashed") >> workloads
-    c_addons >> Edge(style="dashed") >> workloads
 
     # highlight the ordering constraint unique to Cilium
     c_eks >> Edge(label="CNI must be installed\nBEFORE nodes go Ready",

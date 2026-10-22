@@ -6,6 +6,11 @@
 # mode (otherwise it would try to serve HTTPS on that port and redirect-loop).
 global:
   domain: gateway-argocd.sctp-sandbox.com
+  # Ingress-only policies. The server accepts every source, so the Cilium
+  # gateway can reach the UI. Peers are allowed to redis, repo-server, and dex.
+  # Egress stays open for git, Helm, and the API. Leave defaultDenyIngress off.
+  networkPolicy:
+    create: true
 
 configs:
   params:
@@ -14,3 +19,45 @@ configs:
 server:
   ingress:
     enabled: false
+  # argo-cd 9.5.21: metrics.enabled creates the metrics Service;
+  # metrics.serviceMonitor.enabled creates the ServiceMonitor.
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+controller:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+repoServer:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+applicationSet:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+dex:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+redis:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+notifications:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true

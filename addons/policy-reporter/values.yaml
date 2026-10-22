@@ -1,0 +1,71 @@
+# UI and Kyverno plugin for PolicyReports. The chart turns the REST API on
+# when the UI is enabled. Installed into the existing kyverno namespace.
+
+ui:
+  enabled: true
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      external-dns.alpha.kubernetes.io/hostname: "admin-policy-reporter.sctp-sandbox.com"
+    hosts:
+      - host: admin-policy-reporter.sctp-sandbox.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: policy-reporter-ui-tls
+        hosts:
+          - admin-policy-reporter.sctp-sandbox.com
+  # The chart's UI NetworkPolicy always emits an ingress rule with an empty
+  # from, and the API rejects that object. Leave it off. The core reporter
+  # and the Kyverno plugin policies still cover their own pods. The UI itself
+  # stays open so nginx, cilium-envoy, and probes can reach it.
+  networkPolicy:
+    enabled: false
+
+plugin:
+  kyverno:
+    enabled: true
+    networkPolicy:
+      enabled: true
+      ingress:
+        - ports:
+            - protocol: TCP
+              port: 8080
+      egress:
+        - ports:
+            - protocol: TCP
+              port: 443
+            - protocol: UDP
+              port: 53
+            - protocol: TCP
+              port: 53
+
+monitoring:
+  enabled: true
+  # The chart dashboards reference an unresolved datasource input, so the
+  # Grafana sidecar would mount panels with no datasource. The Kyverno
+  # dashboards already cover the admission controller.
+  grafana:
+    dashboards:
+      enabled: false
+
+# Chart default egress is TCP 6443 only. Replace it with the EKS API and DNS.
+# Ingress on 8080 has no source selector so the UI, probes, and Prometheus
+# are allowed. The chart also allows the UI pods to this port.
+networkPolicy:
+  enabled: true
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    - ports:
+        - protocol: TCP
+          port: 443
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

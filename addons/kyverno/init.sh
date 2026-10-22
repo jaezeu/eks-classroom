@@ -8,11 +8,15 @@
 # The cleanup workflow deletes the ClusterPolicies before uninstalling
 # releases for the same reason.
 
+# ServiceMonitor CRDs, before this chart renders monitoring.coreos.com resources.
+"$(cd "$(dirname "$0")" && pwd)/../kube-prometheus-stack/install-crds.sh"
+
 # --wait so the admission webhooks are ready before the policies are applied
 # renovate: datasource=helm depName=kyverno registryUrl=https://kyverno.github.io/kyverno/
 helm upgrade --install kyverno kyverno --repo https://kyverno.github.io/kyverno/ --version 3.8.1 \
   --namespace kyverno \
   --create-namespace \
+  --values values.yaml \
   --wait
 
 kubectl apply -f ../../kyverno-policies/

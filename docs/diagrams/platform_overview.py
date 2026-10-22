@@ -2,7 +2,7 @@
 
 Shows the VPC/subnet layout, the EKS control plane and its managed add-ons,
 the ARM64 managed node group, every in-cluster add-on grouped by namespace,
-the sample workloads, the Kyverno admission layer, and the IRSA roles that
+the Kyverno admission layer, and the IRSA roles that
 map Kubernetes service accounts to AWS services (Route 53 / S3 / EBS).
 
 Regenerate:  python3 platform_overview.py   ->  ../images/platform-overview.png
@@ -13,7 +13,7 @@ from diagrams.aws.compute import EKS, EC2
 from diagrams.aws.network import VPC, PublicSubnet, PrivateSubnet, NATGateway, InternetGateway, ELB, Route53
 from diagrams.aws.security import IAMRole
 from diagrams.aws.storage import S3, ElasticBlockStoreEBS
-from diagrams.k8s.compute import Pod, DaemonSet, Deployment
+from diagrams.k8s.compute import DaemonSet, Deployment
 from diagrams.k8s.controlplane import KubeProxy
 from diagrams.k8s.network import Ingress, Service
 from diagrams.k8s.others import CRD
@@ -104,18 +104,14 @@ with Diagram(
                     with Cluster("ns: kyverno"):
                         kyverno = Custom("Kyverno\nadmission policies", ICON("kyverno"))
 
-                    with Cluster("Workloads"):
-                        wordpress = Pod("wordpress\n(+ MariaDB)")
-                        postgres = Pod("postgres")
-
     # ---- traffic path ----
     igw >> nat
     igw >> Edge(label="HTTPS") >> nlb >> nginx
-    nginx >> Edge(color="darkblue") >> [argo, graf, prom, wordpress]
+    nginx >> Edge(color="darkblue") >> [argo, graf, prom]
     cp >> nodes
 
     # ---- observability scrape ----
-    [wordpress, postgres, tetragon, cilium] >> Edge(style="dotted", color="gray40", label="ServiceMonitor") >> prom
+    [tetragon, cilium] >> Edge(style="dotted", color="gray40", label="ServiceMonitor") >> prom
     prom >> Edge(color="orange") >> graf
     promtail >> Edge(label="logs") >> loki
     loki >> Edge(color="orange") >> graf

@@ -1,5 +1,8 @@
 prometheus:
   prometheusSpec:
+    # Match every ServiceMonitor, including ones created by the other add-ons.
+    # Chart ServiceMonitors (Prometheus, Alertmanager, Grafana, node-exporter,
+    # kube-state-metrics, kubelet) stay at the chart defaults, which are on.
     serviceMonitorSelectorNilUsesHelmValues: false
   ingress:
     enabled: true
@@ -15,6 +18,15 @@ prometheus:
       - secretName: prometheus-general-tls
         hosts:
           - admin-prom.sctp-sandbox.com
+  # Empty rule lists deny every packet. Prometheus scrapes every ServiceMonitor,
+  # including targets on node IPs, and Grafana plus the ingress query it.
+  networkPolicy:
+    enabled: true
+    flavor: kubernetes
+    ingress:
+      - {}
+    egress:
+      - {}
 grafana:
   ingress:
     enabled: true
@@ -28,9 +40,68 @@ grafana:
       - secretName: grafana-general-tls
         hosts:
           - admin-grafana.sctp-sandbox.com
+  # Ingress stays open (chart default) so the ingress and probes can reach the UI.
+  # Egress is limited to DNS plus the ports Grafana actually dials: Prometheus,
+  # Alertmanager, the Loki gateway, and 443 for the dashboard download.
+  networkPolicy:
+    enabled: true
+    egress:
+      enabled: true
+      ports:
+        - port: 80
+          protocol: TCP
+        - port: 443
+          protocol: TCP
+        - port: 8080
+          protocol: TCP
+        - port: 9090
+          protocol: TCP
+        - port: 9093
+          protocol: TCP
 prometheus-node-exporter:
   extraArgs:
     - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/.+)($|/)
     - --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$
     - --collector.systemd
     - --collector.ethtool
+  # Ingress allows the metrics port from any source. The exporter has no outbound traffic.
+  networkPolicy:
+    enabled: true
+
+prometheusOperator:
+  # Chart default egress is allow-all and ingress is the metrics port from any source,
+  # which covers probes, scrapes, and the API.
+  networkPolicy:
+    enabled: true
+    flavor: kubernetes
+
+alertmanager:
+  networkPolicy:
+    enabled: true
+    # No source selector: probes, Grafana, the Loki ruler, and the ingress
+    # can all reach the UI and the reloader metrics port.
+    additionalIngress:
+      - ports:
+          - port: 9093
+            protocol: TCP
+          - port: 8080
+            protocol: TCP
+
+kube-state-metrics:
+  # Readiness is on the metrics port (8081). The chart only opens that port
+  # in the policy when self-monitoring is on.
+  selfMonitor:
+    enabled: true
+  # An enabled policy with no egress rules denies every outbound connection,
+  # which would stop the API watch. 443 is the EKS API; 53 is CoreDNS.
+  networkPolicy:
+    enabled: true
+    flavor: kubernetes
+    egress:
+      - ports:
+          - port: 443
+            protocol: TCP
+          - port: 53
+            protocol: UDP
+          - port: 53
+            protocol: TCP

@@ -6,6 +6,9 @@
 VALUES_FILE="${1:-values.yaml}"
 ISSUER_FILE="${2:-cluster-issuer.yaml}"
 
+# ServiceMonitor CRDs, before this chart renders monitoring.coreos.com resources.
+"$(cd "$(dirname "$0")" && pwd)/../kube-prometheus-stack/install-crds.sh"
+
 # renovate: datasource=helm depName=cert-manager registryUrl=https://charts.jetstack.io
 helm upgrade --install cert-manager cert-manager --repo https://charts.jetstack.io \
   --namespace cert-manager \
