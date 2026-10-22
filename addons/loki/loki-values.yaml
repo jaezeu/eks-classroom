@@ -143,3 +143,84 @@ write:
 singleBinary:
  replicas: 0
 
+# loki 6.29.0 still creates ServiceMonitors from monitoring.serviceMonitor
+# (marked deprecated in the chart, but it is the key this version honors).
+# metricsInstance is the Grafana Agent CR; leave it off so only Prometheus scrapes.
+monitoring:
+  serviceMonitor:
+    enabled: true
+    metricsInstance:
+      enabled: false
+
+# Kubernetes NetworkPolicy on the standard cluster. The Cilium workflow passes
+# networkpolicy-cilium.yaml, which switches flavor to cilium.
+# Port 443 with no cidr allows S3 and the EKS API. DNS, gateway ingress, and
+# metrics ingress come from the chart. The chart alertmanager rule only
+# selects the backend target, which this install does not run, so the ruler
+# allow is an extra manifest below.
+networkPolicy:
+  enabled: true
+  flavor: kubernetes
+  externalStorage:
+    ports:
+      - 443
+
+extraObjects:
+  - apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: loki-ruler-alertmanager
+      namespace: loki
+    spec:
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: loki
+          app.kubernetes.io/instance: loki
+          app.kubernetes.io/component: ruler
+      policyTypes:
+        - Egress
+      egress:
+        - to:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: monitoring
+              podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: alertmanager
+          ports:
+            - port: 9093
+              protocol: TCP
+  - apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: loki-dns-all
+      namespace: loki
+    spec:
+      podSelector: {}
+      policyTypes:
+        - Egress
+      egress:
+        - to:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: kube-system
+          ports:
+            - port: 53
+              protocol: UDP
+            - port: 53
+              protocol: TCP
+  - apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: loki-ingress-monitoring
+      namespace: loki
+    spec:
+      podSelector: {}
+      policyTypes:
+        - Ingress
+      ingress:
+        - from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: monitoring
+

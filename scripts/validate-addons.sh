@@ -99,9 +99,12 @@ ADDONS=(
   ebs-csi-driver
   kube-prometheus-stack
   kyverno
+  metrics-server
+  policy-reporter
   loki
   nginx-ingress
   r53-externaldns
+  trivy-operator
 )
 
 # Add-ons with a Gateway API variant get validated twice: default values and
@@ -110,6 +113,7 @@ declare -A GATEWAY_ARGS=(
   [argocd]="gateway-values.yaml"
   [cert-manager]="gateway-values.yaml gateway-cluster-issuer.yaml"
   [kube-prometheus-stack]="gateway-values.yaml"
+  [policy-reporter]="gateway-values.yaml"
   [r53-externaldns]="gateway-values.yaml"
 )
 

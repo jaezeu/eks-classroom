@@ -1,0 +1,27 @@
+# kyverno 3.8.1: each controller has its own serviceMonitor.enabled.
+# metricsService is created by default, so the monitors have a port to scrape.
+admissionController:
+  serviceMonitor:
+    enabled: true
+  # Empty ingressFrom keeps the chart allow-all ingress rule, so the API server
+  # can call the webhook and Prometheus can scrape. Egress stays unrestricted.
+  networkPolicy:
+    enabled: true
+
+backgroundController:
+  serviceMonitor:
+    enabled: true
+  networkPolicy:
+    enabled: true
+
+cleanupController:
+  serviceMonitor:
+    enabled: true
+  networkPolicy:
+    enabled: true
+
+reportsController:
+  serviceMonitor:
+    enabled: true
+  networkPolicy:
+    enabled: true

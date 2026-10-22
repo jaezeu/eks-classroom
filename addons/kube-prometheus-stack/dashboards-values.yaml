@@ -1,0 +1,137 @@
+# Dashboards loaded when the Grafana pod starts.
+#
+# The chart's download-dashboards init container fetches each JSON below into
+# the matching provider directory. Grafana then provisions that directory as a
+# folder. The Kubernetes mixin dashboards that ship inside kube-prometheus-stack
+# (API server, nodes, pods, Prometheus, Grafana, Alertmanager, CoreDNS, and the
+# rest) are filed under Admin by the dashboard sidecar.
+#
+# Pins follow the component version this repo installs. A failed download fails
+# Grafana startup, so do not point these at a moving branch.
+#
+# Components that exist on only one cluster are in dashboards-standard.yaml
+# (ingress-nginx) and dashboards-cilium.yaml (Cilium, Hubble, Tetragon).
+# Sample apps are not part of the cluster install, so they have no dashboards.
+#
+# The EBS CSI driver exposes Prometheus metrics, and there is no published
+# dashboard for those series. Persistent-volume usage is already on the mixin
+# dashboards in Admin.
+#
+# datasourceRewrites is not a chart setting. It only holds YAML anchors for the
+# placeholder substitutions the download script applies. Prometheus is the
+# datasource kube-prometheus-stack provisions (uid prometheus). Loki is added
+# below (uid loki) for the log panels.
+
+datasourceRewrites:
+  prometheusInput: &dsPrometheus
+    - name: DS_PROMETHEUS
+      value: prometheus
+  prometheusVariable: &dsVariable
+    - name: datasource
+      value: prometheus
+  kyverno: &dsKyverno
+    - name: DS_PROMETHEUS_KYVERNO
+      value: prometheus
+  lokiAndPrometheus: &dsLokiProm
+    - name: DS_PROMETHEUS
+      value: prometheus
+    - name: DS_LOKI
+      value: loki
+  lokiLogs: &dsLokiLogs
+    - name: datasource
+      value: prometheus
+    - name: logs
+      value: loki
+
+grafana:
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      uid: loki
+      access: proxy
+      isDefault: false
+      editable: false
+      url: http://loki-gateway.loki.svc.cluster.local
+
+  sidecar:
+    dashboards:
+      folderAnnotation: grafana_folder
+      annotations:
+        grafana_folder: Admin
+      provider:
+        foldersFromFilesStructure: true
+
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: network
+          orgId: 1
+          folder: Network
+          folderUid: network
+          type: file
+          disableDeletion: false
+          allowUiUpdates: false
+          updateIntervalSeconds: 30
+          options:
+            path: /var/lib/grafana/dashboards/network
+        - name: security
+          orgId: 1
+          folder: Security
+          folderUid: security
+          type: file
+          disableDeletion: false
+          allowUiUpdates: false
+          updateIntervalSeconds: 30
+          options:
+            path: /var/lib/grafana/dashboards/security
+        - name: devops
+          orgId: 1
+          folder: DevOps
+          folderUid: devops
+          type: file
+          disableDeletion: false
+          allowUiUpdates: false
+          updateIntervalSeconds: 30
+          options:
+            path: /var/lib/grafana/dashboards/devops
+
+  dashboards:
+    network:
+      # external-dns 0.21 (chart 1.21.1). Dashboard 23969 is the 0.18+ metrics set.
+      external-dns:
+        gnetId: 23969
+        revision: 1
+        datasource: *dsVariable
+
+    security:
+      # cert-manager v1.20
+      cert-manager:
+        gnetId: 20850
+        revision: 1
+        datasource: *dsVariable
+      # Kyverno chart 3.8.1 (app v1.18.1)
+      kyverno:
+        url: https://raw.githubusercontent.com/kyverno/kyverno/v1.18.1/charts/kyverno/charts/grafana/dashboard/kyverno-dashboard.json
+        datasource: *dsKyverno
+      # Trivy Operator docs point at grafana.com/dashboards/17813 revision 2.
+      trivy-operator:
+        gnetId: 17813
+        revision: 2
+        datasource: *dsPrometheus
+
+    devops:
+      # Argo CD v3.4.3 (chart 9.5.21)
+      argocd:
+        url: https://raw.githubusercontent.com/argoproj/argo-cd/v3.4.3/examples/dashboard.json
+        datasource: *dsVariable
+      # Loki chart 6.29.0. The operational mixin dashboards assume SimpleScalable
+      # job labels, which do not match this Distributed install.
+      loki-logs:
+        url: https://raw.githubusercontent.com/grafana/loki/helm-loki-6.29.0/production/helm/loki/src/dashboards/loki-logs.json
+        datasource: *dsLokiLogs
+      # Promtail chart 6.7.4
+      promtail:
+        gnetId: 20881
+        revision: 1
+        datasource: *dsLokiProm

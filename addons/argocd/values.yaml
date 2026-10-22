@@ -1,5 +1,10 @@
 global:
   domain: admin-argocd.sctp-sandbox.com
+  # Ingress-only policies. The server accepts every source, so the ingress can
+  # reach the UI. Peers are allowed to redis, repo-server, and dex. Egress stays
+  # open for git, Helm, and the API. Leave defaultDenyIngress off.
+  networkPolicy:
+    create: true
 # configs:
 #   # params: 
 #   #   "server.insecure": true
@@ -14,3 +19,45 @@ server:
       nginx.ingress.kubernetes.io/ssl-passthrough: "true"
       nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
     tls: true
+  # argo-cd 9.5.21: metrics.enabled creates the metrics Service;
+  # metrics.serviceMonitor.enabled creates the ServiceMonitor.
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+controller:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+repoServer:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+applicationSet:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+dex:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+redis:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+notifications:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true

@@ -1,0 +1,5 @@
+# trivy-operator 0.37.0. The metrics Service (port name: metrics) exists by
+# default. serviceMonitor.enabled creates the ServiceMonitor in the release
+# namespace; kube-prometheus-stack selects it from any namespace.
+serviceMonitor:
+  enabled: true

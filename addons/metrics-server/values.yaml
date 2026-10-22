@@ -1,0 +1,11 @@
+# EKS kubelet serving certificates are signed for the node IP and are not
+# trusted by this process. Appended after the chart defaultArgs, which already
+# prefer InternalIP. kubectl top and the HorizontalPodAutoscaler API use this.
+args:
+  - --kubelet-insecure-tls
+
+metrics:
+  enabled: true
+
+serviceMonitor:
+  enabled: true

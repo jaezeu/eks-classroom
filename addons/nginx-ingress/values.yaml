@@ -1,5 +1,11 @@
 controller:
+  # Ingress allows the controller, metrics, and admission ports from any source.
+  # Egress is allow-all, so the controller can reach every backend and the API.
+  networkPolicy:
+    enabled: true
   metrics:
     enabled: true
-    # serviceMonitor:
-    #   enabled: true
+    # ingress-nginx 4.15.1: controller.metrics.serviceMonitor.enabled
+    # (also requires controller.metrics.enabled, set above).
+    serviceMonitor:
+      enabled: true

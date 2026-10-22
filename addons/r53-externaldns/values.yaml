@@ -15,3 +15,7 @@ sources:
   # - gateway-tlsroute
 logLevel: info #[panic, debug, info, warning, error, fatal]
 logFormat: text # text / json
+
+# external-dns 1.21.1 scrapes the http Service (:7979 /metrics).
+serviceMonitor:
+  enabled: true

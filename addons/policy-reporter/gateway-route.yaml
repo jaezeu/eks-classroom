@@ -1,0 +1,51 @@
+# Policy Reporter UI exposed via Gateway API on the Cilium cluster.
+#
+# ListenerSet attaches an HTTPS listener for the UI hostname onto the shared
+# Gateway. HTTPRoute sends that hostname to policy-reporter-ui (HTTP :8080,
+# TLS already terminated at the Gateway).
+#
+# Applied by the Cilium workflow after addons/policy-reporter/init.sh, and
+# only when Kyverno is enabled. The hostname must end in .sctp-sandbox.com.
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: policy-reporter-listeners
+  namespace: kyverno
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-gateway"
+spec:
+  parentRef:
+    name: shared-gateway
+    namespace: gateway
+  listeners:
+    - name: policy-reporter-https
+      hostname: gateway-policy-reporter.sctp-sandbox.com
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: policy-reporter-gateway-tls
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: policy-reporter-route
+  namespace: kyverno
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: "gateway-policy-reporter.sctp-sandbox.com"
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: ListenerSet
+      name: policy-reporter-listeners
+      sectionName: policy-reporter-https
+  hostnames:
+    - gateway-policy-reporter.sctp-sandbox.com
+  rules:
+    - backendRefs:
+        - name: policy-reporter-ui
+          port: 8080

@@ -4,9 +4,32 @@
 # (see gateway-route.yaml) instead of Ingress.
 prometheus:
   prometheusSpec:
+    # Match every ServiceMonitor, including ones created by the other add-ons.
+    # Chart ServiceMonitors (Prometheus, Alertmanager, Grafana, node-exporter,
+    # kube-state-metrics, kubelet) stay at the chart defaults, which are on.
     serviceMonitorSelectorNilUsesHelmValues: false
   ingress:
     enabled: false
+  networkPolicy:
+    enabled: true
+    flavor: cilium
+    cilium:
+      # cluster covers pod scrapes and CoreDNS. host and remote-node cover
+      # kubelet and the hostNetwork node-exporter. kube-apiserver is the EKS API.
+      egress:
+        - toEntities:
+            - cluster
+            - host
+            - remote-node
+            - kube-apiserver
+      # No source selector: probes, Grafana, and the Cilium gateway can all connect.
+      ingress:
+        - toPorts:
+            - ports:
+                - port: "9090"
+                  protocol: TCP
+                - port: "8080"
+                  protocol: TCP
 
 grafana:
   ingress:
@@ -16,6 +39,24 @@ grafana:
   grafana.ini:
     server:
       root_url: https://gateway-admin-grafana.sctp-sandbox.com
+  # Ingress stays open so the Cilium gateway and probes can reach the UI.
+  # Egress is DNS plus Prometheus, Alertmanager, the Loki gateway, and 443
+  # for the dashboard download.
+  networkPolicy:
+    enabled: true
+    egress:
+      enabled: true
+      ports:
+        - port: 80
+          protocol: TCP
+        - port: 443
+          protocol: TCP
+        - port: 8080
+          protocol: TCP
+        - port: 9090
+          protocol: TCP
+        - port: 9093
+          protocol: TCP
 
 prometheus-node-exporter:
   extraArgs:
@@ -23,3 +64,57 @@ prometheus-node-exporter:
     - --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$
     - --collector.systemd
     - --collector.ethtool
+  networkPolicy:
+    enabled: true
+
+prometheusOperator:
+  networkPolicy:
+    enabled: true
+    flavor: cilium
+    cilium:
+      # Setting egress replaces the chart default, which is kube-apiserver only.
+      egress:
+        - toEntities:
+            - kube-apiserver
+        - toEndpoints:
+            - matchLabels:
+                k8s:io.kubernetes.pod.namespace: kube-system
+                k8s:k8s-app: kube-dns
+          toPorts:
+            - ports:
+                - port: "53"
+                  protocol: ANY
+
+alertmanager:
+  networkPolicy:
+    enabled: true
+    # No source selector: probes, Grafana, the Loki ruler, and the Cilium
+    # gateway can all reach the UI and the reloader metrics port.
+    additionalIngress:
+      - ports:
+          - port: 9093
+            protocol: TCP
+          - port: 8080
+            protocol: TCP
+
+kube-state-metrics:
+  # Readiness is on the metrics port (8081). The chart only opens that port
+  # in the Cilium policy when self-monitoring is on.
+  selfMonitor:
+    enabled: true
+  networkPolicy:
+    enabled: true
+    flavor: cilium
+    cilium:
+      # This key replaces the whole egress list, so DNS has to be in it.
+      kubeApiServerSelector:
+        - toEntities:
+            - kube-apiserver
+        - toEndpoints:
+            - matchLabels:
+                k8s:io.kubernetes.pod.namespace: kube-system
+                k8s:k8s-app: kube-dns
+          toPorts:
+            - ports:
+                - port: "53"
+                  protocol: ANY

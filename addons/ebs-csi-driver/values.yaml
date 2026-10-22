@@ -2,3 +2,25 @@ controller:
   serviceAccount:
     annotations:
       eks.amazonaws.com/role-arn: ${EBS_CSI_ROLE_ARN} # substituted from the Terraform output ebs_csi_driver_role_arn
+  # aws-ebs-csi-driver 2.61.1 has no serviceMonitor.enabled flag. enableMetrics
+  # creates the metrics Services, and the chart adds ServiceMonitors when the
+  # Prometheus Operator CRD is installed (serviceMonitor.forceEnable stays false).
+  enableMetrics: true
+
+node:
+  enableMetrics: true
+
+# Default class for workloads that omit storageClassName. The chart's
+# defaultStorageClass toggle creates ebs-csi-default-sc with no volume type,
+# so this list is used instead and gp3 is set explicitly. Delete matches a
+# short-lived sandbox; expansion stays on so a learner can grow a volume.
+storageClasses:
+  - name: gp3
+    annotations:
+      storageclass.kubernetes.io/is-default-class: "true"
+    volumeBindingMode: WaitForFirstConsumer
+    reclaimPolicy: Delete
+    allowVolumeExpansion: true
+    parameters:
+      type: gp3
+      encrypted: "true"

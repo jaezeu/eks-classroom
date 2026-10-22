@@ -26,6 +26,11 @@ hostLegacyRouting: false
 # kube-proxy replacement: Cilium must reach the API server directly since
 # there is no kube-proxy to route the in-cluster kubernetes Service
 kubeProxyReplacement: true
+
+# Audit mode: the agent evaluates CiliumNetworkPolicy and NetworkPolicy,
+# records the verdict, and allows the packet. Enforcement mode stays at the
+# chart default ("default"), so only pods selected by a policy are audited.
+policyAuditMode: true
 k8sServiceHost: ${CLUSTER_ENDPOINT}
 k8sServicePort: 443
 
@@ -38,6 +43,11 @@ hubble:
   enabled: true
   relay:
     enabled: true
+    # cilium 1.20: hubble.relay.prometheus.serviceMonitor
+    prometheus:
+      enabled: true
+      serviceMonitor:
+        enabled: true
   ui:
     enabled: true
   tls:
@@ -51,7 +61,30 @@ hubble:
       - flow
       - icmp
       - http
+    # cilium 1.20: hubble.metrics.serviceMonitor (requires the metrics list above)
+    serviceMonitor:
+      enabled: true
 
 encryption:
   enabled: false
   nodeEncryption: false
+
+# cilium 1.20: agent metrics. prometheus.enabled opens the metrics port;
+# prometheus.serviceMonitor creates the ServiceMonitor.
+prometheus:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+
+# Operator metrics are on by default; only the ServiceMonitor is off.
+operator:
+  prometheus:
+    serviceMonitor:
+      enabled: true
+
+# Envoy metrics are on by default (Gateway API / L7 proxy). The ServiceMonitor
+# covers the cilium-envoy DaemonSet.
+envoy:
+  prometheus:
+    serviceMonitor:
+      enabled: true

@@ -1,0 +1,50 @@
+# Cilium cluster: ingress stays off. The workflow applies gateway-route.yaml
+# (ListenerSet + HTTPRoute) after this file. Same workload settings as
+# values.yaml; Helm does not merge the two files.
+
+ui:
+  enabled: true
+  ingress:
+    enabled: false
+  # Same reason as values.yaml: the chart's UI policy emits an empty from.
+  networkPolicy:
+    enabled: false
+
+plugin:
+  kyverno:
+    enabled: true
+    networkPolicy:
+      enabled: true
+      ingress:
+        - ports:
+            - protocol: TCP
+              port: 8080
+      egress:
+        - ports:
+            - protocol: TCP
+              port: 443
+            - protocol: UDP
+              port: 53
+            - protocol: TCP
+              port: 53
+
+monitoring:
+  enabled: true
+  grafana:
+    dashboards:
+      enabled: false
+
+networkPolicy:
+  enabled: true
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    - ports:
+        - protocol: TCP
+          port: 443
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
