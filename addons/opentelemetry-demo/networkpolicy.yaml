@@ -1,0 +1,100 @@
+# CiliumNetworkPolicy for the OpenTelemetry demo. The addon is Cilium-only.
+# The shop chart has no network-policy switch. The collector subchart only
+# emits a Kubernetes NetworkPolicy, which cannot name the EKS API or kubelet.
+# Jaeger chart 0.42.6 accepts networkPolicy.enabled and does not render it.
+#
+# Cilium is in audit mode, so these policies are evaluated and still allow
+# the packet. An empty fromEndpoints matchLabels matches every endpoint in
+# the cluster, so each in-namespace selector sets the namespace label.
+# Do not pass this file through envsubst.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: otel-demo-same-namespace
+  namespace: otel-demo
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: otel-demo
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: otel-demo
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: otel-demo-dns
+  namespace: otel-demo
+spec:
+  endpointSelector: {}
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: otel-demo-probes
+  namespace: otel-demo
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEntities:
+        - host
+        - health
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: otel-collector-scrape
+  namespace: otel-demo
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: opentelemetry-collector
+      app.kubernetes.io/instance: opentelemetry-demo
+  egress:
+    # cluster: in-namespace exporters, annotation discovery, Prometheus, Loki.
+    # host and remote-node: kubelet stats. kube-apiserver: attribute and
+    # cluster receivers. EKS serves the API outside the pod network.
+    - toEntities:
+        - cluster
+        - host
+        - remote-node
+        - kube-apiserver
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: jaeger-monitoring
+  namespace: otel-demo
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: jaeger
+      app.kubernetes.io/instance: opentelemetry-demo
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: monitoring
+      toPorts:
+        - ports:
+            - port: "16686"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: monitoring
+      toPorts:
+        - ports:
+            - port: "9090"
+              protocol: TCP

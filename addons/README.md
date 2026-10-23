@@ -19,6 +19,7 @@ directory is self-contained: a `values.yaml` (Helm configuration) and an
 | [opentelemetry-demo](opentelemetry-demo/) | `otel-demo` | open-telemetry/opentelemetry-demo | 0.42.6 | Astronomy shop on the Cilium workflow. Uses this Prometheus, Grafana, Loki, and Jaeger. Selects m6g.xlarge. Not part of Deploy everything. |
 | [ebs-csi-driver](ebs-csi-driver/) | `kube-system` | aws-ebs-csi-driver | 2.61.1 | EBS volumes; default StorageClass `gp3` |
 | [metrics-server](metrics-server/) | `kube-system` | metrics-server/metrics-server | 3.14.0 | `kubectl top` and HorizontalPodAutoscaler metrics |
+| [keda](keda/) | `monitoring` | kedacore/keda | 2.21.0 | Event-driven autoscaling, installed with Prometheus |
 | [kyverno](kyverno/) | `kyverno` | kyverno/kyverno | 3.8.1 | Admission controller + [guardrail policies](../kyverno-policies/) |
 | [policy-reporter](policy-reporter/) | `kyverno` | policy-reporter/policy-reporter | 3.11.1 | Kyverno PolicyReport UI (installed with Kyverno) |
 | [trivy-operator](trivy-operator/) | `trivy-system` | aqua/trivy-operator | 0.37.0 | Workload vulnerability and config-audit reports |
@@ -69,13 +70,13 @@ Order matters, since several add-ons consume resources created by others:
 5. **loki**: needs its IRSA role and the two S3 buckets created by Terraform (`enable_loki_s3`).
 6. **tetragon**: Cilium clusters only; ships ServiceMonitors scraped by Prometheus (install after monitoring).
 7. **ebs-csi-driver**: needs its IRSA role. It also installs the default `gp3` StorageClass, so anything that asks for a volume can bind one.
-8. **metrics-server**: installed with Prometheus. `kube-system` already exists, so the namespace-name policy does not apply. Gives `kubectl top` and the HorizontalPodAutoscaler API.
+8. **metrics-server**: installed with Prometheus. `kube-system` already exists, so the namespace-name policy does not apply. Gives `kubectl top` and the HorizontalPodAutoscaler API. **KEDA** is installed with Prometheus into the existing `monitoring` namespace, after the stack, because it ships ServiceMonitors.
 9. **security** (Trivy Operator, then Kyverno, then Policy Reporter): Trivy is first because the namespace-name policy would reject `trivy-system`. Kyverno is last among namespace-creating installs. Its [policies](../kyverno-policies/) enforce namespace naming and block deletions in protected namespaces. Policy Reporter is installed into the existing `kyverno` namespace (a new namespace would be rejected) and needs the PolicyReport CRDs.
 10. **opentelemetry-demo**: Cilium workflow only, after Prometheus and Loki, and before Kyverno. The namespace-name policy would reject `otel-demo`. Selecting it creates the node group as `m6g.xlarge`. Not included in Deploy everything.
 
 Add-on charts that expose metrics ship a ServiceMonitor (`ingress-nginx`,
 `external-dns`, `cert-manager`, `argo-cd`, Cilium/Hubble, EBS CSI, Loki,
-Promtail, Kyverno, Metrics Server, Policy Reporter, Tetragon, Trivy Operator).
+Promtail, Kyverno, Metrics Server, KEDA, Policy Reporter, Tetragon, Trivy Operator).
 Each of those `init.sh` scripts applies the
 Prometheus Operator CRDs from kube-prometheus-stack `86.2.2` when they are
 not already installed, so the monitors can be created before the monitoring
@@ -123,6 +124,7 @@ objects are installed and not applied there.
 | Prometheus Operator | `prometheusOperator.networkPolicy` (`flavor`) | CiliumNetworkPolicy | NetworkPolicy |
 | kube-state-metrics | `kube-state-metrics.networkPolicy` (`flavor`) | CiliumNetworkPolicy | NetworkPolicy |
 | Loki | `networkPolicy` (`flavor`) | CiliumNetworkPolicy | NetworkPolicy |
+| KEDA (operator, metrics apiserver, webhooks) | `networkPolicy` (`flavor`) | CiliumNetworkPolicy | NetworkPolicy |
 | Alertmanager | `alertmanager.networkPolicy` | NetworkPolicy | NetworkPolicy |
 | Grafana | `grafana.networkPolicy` | NetworkPolicy | NetworkPolicy |
 | node-exporter | `prometheus-node-exporter.networkPolicy` | NetworkPolicy | NetworkPolicy |
@@ -138,6 +140,7 @@ objects are installed and not applied there.
 | Metrics Server 3.14.0 | none | — | — |
 | Trivy Operator 0.37.0 | none | — | — |
 | Tetragon v1.5.0 | none | — | — |
+| OpenTelemetry demo | CiliumNetworkPolicy manifests | CiliumNetworkPolicy | not installed |
 
 Cilium itself is the policy engine and is not wrapped in a default-deny
 policy. external-dns, the EBS CSI driver, Metrics Server, Trivy Operator, and
@@ -199,6 +202,60 @@ traffic is denied. The exporter reads the node locally and does not open
 connections. It runs with `hostNetwork: true`; Prometheus reaches it through
 the host and remote-node entities on the Cilium Prometheus policy, and
 through the allow-all egress on the standard Prometheus policy.
+
+### KEDA
+
+Chart `2.21.0`, release `keda`, namespace `monitoring`. `networkPolicy.enabled`
+is set and `networkPolicy.flavor` is `kubernetes` in `values.yaml`. The Cilium
+workflow runs `./init.sh cilium`, which merges
+[`networkpolicy-cilium.yaml`](keda/networkpolicy-cilium.yaml) and switches the
+flavor. The chart renders one flavor or the other. `certificates.certManager`
+stays off, so the chart's self-signed webhook certificates are used and
+cert-manager is not required.
+
+Prometheus metrics are on for the operator, the metrics apiserver, and the
+admission webhooks (`prometheus.operator.enabled`,
+`prometheus.metricServer.enabled`, `prometheus.webhooks.enabled`), each with
+a ServiceMonitor in `monitoring`. The scrape port on every component is 8080,
+named `metrics`.
+
+The chart's Kubernetes rules, once enabled:
+
+- DNS UDP and TCP 53 to pods labeled `k8s-app: kube-dns`. CoreDNS in
+  `kube-system` matches. The selector is any namespace.
+- Egress to every pod, with no port list, so the operator can reach
+  in-cluster metric sources such as Prometheus. The metrics apiserver can
+  reach the operator gRPC port 9666.
+- TCP 443 and 6443 to every pod. That does not reach the EKS API, which is
+  not a pod and listens on 443. `extraEgressRules` on the operator, the
+  metrics apiserver, and the webhooks adds TCP 443 with no destination peer.
+  Kubernetes NetworkPolicy cannot select that endpoint. The rule is not an
+  `ipBlock` of `0.0.0.0/0`, and it does allow 443 to any address, which is
+  what makes the API reachable. 6443 is not added.
+- Ingress from any pod on 9666 (operator gRPC), 6443 (metrics apiserver
+  HTTPS), and 9443 (admission webhook). Port 8080 is added on each
+  component because Prometheus metrics are enabled.
+
+Those ingress rules select pods. The API server and the kubelet are not pods,
+and the chart omits probe port 8081. Three extra Kubernetes NetworkPolicies
+in `values.yaml` apply on both clusters. Each is Ingress only and has no
+`from` selector:
+
+- `keda-operator-ingress`: TCP 8081 (probes, `/healthz` and `/readyz`) and
+  TCP 8080 (Prometheus).
+- `keda-metrics-apiserver-ingress`: TCP 6443 (API aggregation for
+  `external.metrics.k8s.io`, and the HTTPS probes) and TCP 8080.
+- `keda-admission-webhooks-ingress`: TCP 9443 (admission), TCP 8081 (probes),
+  and TCP 8080.
+
+The Cilium template replaces the chart's Kubernetes policies. Egress is
+`toEntities` `kube-apiserver` and `cluster`. `cluster` covers in-cluster
+metric sources and CoreDNS, so UDP and TCP 53 to `kube-system` are allowed
+without a separate DNS rule and without world egress. The `extraEgressRules`
+443 rule is not rendered on this flavor. Ingress is `fromEntities` `cluster`,
+which covers Prometheus and the gRPC call from the metrics apiserver, and
+does not cover the API server or the kubelet. The extra policies above supply
+those ports.
 
 ### Loki and Promtail
 
@@ -271,6 +328,29 @@ PostgreSQL in **DevOps**.
 OpenSearch log panels are LogQL on the demo board and dropped where the panel
 was OpenSearch-only. The quote panel filtered `job="quote"` and is removed.
 PostgreSQL queries `k8s_deployment_name` because astronomy-db is a Deployment.
+
+`init.sh` applies [`networkpolicy.yaml`](opentelemetry-demo/networkpolicy.yaml).
+The shop components have no policy switch. The collector subchart can emit a
+Kubernetes NetworkPolicy only, and that object cannot select the EKS API or
+the kubelet. Jaeger accepts `networkPolicy.enabled` and chart 0.42.6 does not
+render a policy from it. The manifests are CiliumNetworkPolicy:
+
+- Every pod may talk to every other pod in `otel-demo`, and to CoreDNS on
+  UDP and TCP 53. Kubelet probes are allowed from the `host` entity, and
+  Cilium's health checks from the `health` entity.
+- The collector (`app.kubernetes.io/name=opentelemetry-collector`) may also
+  reach `cluster`, `host`, `remote-node`, and `kube-apiserver`. That covers
+  annotation discovery, the Prometheus OTLP receiver, the Loki gateway,
+  kubelet stats, and the Kubernetes attribute receiver. Prometheus already
+  accepts 9090 from any source, and the Loki gateway already accepts 8080
+  from `otel-demo`.
+- Jaeger may open TCP 9090 in `monitoring` (its `PROMETHEUS_ADDR`). Grafana
+  may open Jaeger TCP 16686; Grafana's own egress list already includes that
+  port.
+- The agent talks to a recorded VCR cassette (`USE_VCR=true`), so there is
+  no world egress. frontend-proxy still names a `grafana` service in
+  `otel-demo`; the demo Grafana subchart is off, and no cross-namespace
+  allow is added for that name.
 
 ### cert-manager
 

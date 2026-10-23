@@ -1,0 +1,6 @@
+# Passed only by the Cilium workflow (./init.sh cilium). Merged on top of
+# values.yaml. Flavor replaces the chart policy: this file renders
+# CiliumNetworkPolicy and the chart's Kubernetes NetworkPolicy is omitted.
+# The extra Kubernetes policies in values.yaml still apply. Cilium unions them.
+networkPolicy:
+  flavor: cilium

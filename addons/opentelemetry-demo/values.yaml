@@ -10,6 +10,8 @@
 #
 # Install after Prometheus and Loki, and before Kyverno. The namespace-name
 # policy rejects otel-demo. This add-on is not part of Deploy everything.
+# Network policy is networkpolicy.yaml, applied by init.sh. The chart
+# switches cannot name the EKS API or kubelet.
 
 prometheus:
   enabled: false

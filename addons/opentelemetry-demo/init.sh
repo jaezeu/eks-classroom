@@ -12,6 +12,10 @@ helm upgrade --install opentelemetry-demo opentelemetry-demo \
   --create-namespace \
   --values "$ROOT/values.yaml"
 
+# CiliumNetworkPolicy for the shop, the collector, and Jaeger. Cilium is
+# already installed. Do not pass the file through envsubst.
+kubectl apply --server-side --force-conflicts -f "$ROOT/networkpolicy.yaml"
+
 # Grafana's dashboard sidecar searches every namespace. Its datasource sidecar
 # only searches monitoring, so both objects live there. The dashboard JSON has
 # Grafana variables; do not pass grafana.yaml through envsubst.
