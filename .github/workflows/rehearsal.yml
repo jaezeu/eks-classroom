@@ -67,6 +67,8 @@ jobs:
       tetragon: true
       ebs-csi: true
       kyverno: true
+      metrics-server: true
+      trivy-operator: true
     secrets: inherit
 
   # !cancelled() so the teardown always runs after its create leg, even a failed
@@ -98,6 +100,8 @@ jobs:
       logging: true
       ebs-csi: true
       kyverno: true
+      metrics-server: true
+      trivy-operator: true
     secrets: inherit
 
   standard-cleanup:

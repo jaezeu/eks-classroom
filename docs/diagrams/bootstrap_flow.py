@@ -13,6 +13,7 @@ from diagrams import Cluster, Diagram, Edge
 from diagrams.aws.compute import EKS, EC2
 from diagrams.aws.security import IAMRole
 from diagrams.k8s.others import CRD
+from diagrams.k8s.compute import Pod
 from diagrams.onprem.iac import Terraform
 from diagrams.onprem.ci import GithubActions
 from diagrams.onprem.network import Nginx
