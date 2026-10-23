@@ -4,6 +4,11 @@ name: Cilium CNI Cluster Creation & Bootstrap
 on:
   workflow_dispatch:
     inputs:
+      deploy-everything:
+        type: boolean
+        description: "Deploy everything?"
+        default: false
+        required: true
       region:
         type: choice
         options:
@@ -47,19 +52,14 @@ on:
         description: "Deploy EBS CSI Resources?"
         default: false
         required: true
-      kyverno:
+      security:
         type: boolean
-        description: "Deploy Kyverno, guardrail policies, and Policy Reporter?"
+        description: "Deploy security? Kyverno, guardrail policies, Policy Reporter, and Trivy Operator."
         default: false
         required: true
-      metrics-server:
+      opentelemetry-demo:
         type: boolean
-        description: "Deploy Metrics Server?"
-        default: false
-        required: true
-      trivy-operator:
-        type: boolean
-        description: "Deploy Trivy Operator?"
+        description: "Deploy the OpenTelemetry demo? Not included in Deploy everything. Uses m6g.xlarge nodes."
         default: false
         required: true
   # Mirrors the dispatch inputs so the rehearsal workflow can call this
@@ -67,6 +67,9 @@ on:
   # the jobs below use the typed inputs.* context everywhere.
   workflow_call:
     inputs:
+      deploy-everything:
+        type: boolean
+        default: false
       region:
         type: string
         default: ap-southeast-1
@@ -91,13 +94,10 @@ on:
       ebs-csi:
         type: boolean
         default: false
-      kyverno:
+      security:
         type: boolean
         default: false
-      metrics-server:
-        type: boolean
-        default: false
-      trivy-operator:
+      opentelemetry-demo:
         type: boolean
         default: false
 
@@ -183,7 +183,12 @@ jobs:
           popd
 
           echo "Creating cluster with node group"
-          terraform plan -var-file=vars/cilium-with-nodegroup.tfvars -out cilium-cluster-with-nodegroups.out
+          # m6g.large is the default. The OpenTelemetry demo needs the larger type.
+          TF_NODE_ARGS=()
+          if [ "${{ inputs.opentelemetry-demo }}" = "true" ]; then
+            TF_NODE_ARGS=(-var 'node_instance_types=["m6g.xlarge"]')
+          fi
+          terraform plan -var-file=vars/cilium-with-nodegroup.tfvars "${TF_NODE_ARGS[@]}" -out cilium-cluster-with-nodegroups.out
           terraform apply -auto-approve cilium-cluster-with-nodegroups.out
 
           {
@@ -243,7 +248,7 @@ jobs:
           kubectl apply -f hubble-ui-route.yaml
 
       - name: Deploy ExternalDNS for Route53
-        if: ${{ inputs.external-dns }}
+        if: ${{ inputs.deploy-everything || inputs.external-dns }}
         working-directory: addons/r53-externaldns
         env:
           REGION: ${{ inputs.region }}
@@ -255,7 +260,7 @@ jobs:
           ./init.sh gateway-values.yaml
 
       - name: Deploy Cert Manager
-        if: ${{ inputs.cert-manager }}
+        if: ${{ inputs.deploy-everything || inputs.cert-manager }}
         working-directory: addons/cert-manager
         env:
           EMAIL: ${{ secrets.EMAIL_ADDRESS }}
@@ -264,21 +269,21 @@ jobs:
           envsubst < gateway-cluster-issuer.yaml | kubectl apply -f -
 
       - name: Deploy ArgoCD
-        if: ${{ inputs.argocd }}
+        if: ${{ inputs.deploy-everything || inputs.argocd }}
         working-directory: addons/argocd
         run: |
           ./init.sh gateway-values.yaml
           kubectl apply -f gateway-route.yaml
 
       - name: Deploy Prometheus and Grafana
-        if: ${{ inputs.monitoring }}
+        if: ${{ inputs.deploy-everything || inputs.monitoring }}
         working-directory: addons/kube-prometheus-stack
         run: |
           ./init.sh gateway-values.yaml
           kubectl apply -f gateway-route.yaml
 
       - name: Deploy Loki
-        if: ${{ inputs.logging }}
+        if: ${{ inputs.deploy-everything || inputs.logging }}
         working-directory: addons/loki
         env:
           REGION: ${{ inputs.region }}
@@ -292,12 +297,12 @@ jobs:
           ./init.sh cilium
 
       - name: Deploy Tetragon
-        if: ${{ inputs.tetragon }}
+        if: ${{ inputs.deploy-everything || inputs.tetragon }}
         working-directory: addons/cilium/tetragon
         run: ./init.sh
 
       - name: Deploy EBS CSI Driver Resources
-        if: ${{ inputs.ebs-csi }}
+        if: ${{ inputs.deploy-everything || inputs.ebs-csi }}
         working-directory: addons/ebs-csi-driver
         env:
           EBS_CSI_ROLE_ARN: ${{ needs.deploy.outputs.ebs_csi_role_arn }}
@@ -307,28 +312,36 @@ jobs:
           mv updated-values.yaml values.yaml
           ./init.sh
 
+      # Installed with Prometheus. kube-system already exists, so the
+      # namespace-name policy does not apply.
       - name: Deploy Metrics Server
-        if: ${{ inputs.metrics-server }}
+        if: ${{ inputs.deploy-everything || inputs.monitoring }}
         working-directory: addons/metrics-server
         run: ./init.sh
 
-      # Before Kyverno: the namespace-name policy would reject trivy-system.
+      # Trivy before Kyverno: the namespace-name policy would reject trivy-system.
       - name: Deploy Trivy Operator
-        if: ${{ inputs.trivy-operator }}
+        if: ${{ inputs.deploy-everything || inputs.security }}
         working-directory: addons/trivy-operator
         run: ./init.sh
 
-      # Kyverno must be last among namespace-creating installs: its policies
-      # enforce namespace naming and block deletions in protected namespaces.
-      # Policy Reporter follows it, in the existing kyverno namespace, because
-      # a new namespace would be rejected and it needs the PolicyReport CRDs.
+      # Before Kyverno: the namespace-name policy would reject otel-demo.
+      # Not part of Deploy everything. Needs Prometheus and Loki.
+      # The deploy job uses m6g.xlarge when this option is on.
+      - name: Deploy OpenTelemetry demo
+        if: ${{ inputs.opentelemetry-demo }}
+        working-directory: addons/opentelemetry-demo
+        run: ./init.sh
+
+      # Kyverno is last among namespace-creating installs. Policy Reporter
+      # follows it, in the existing kyverno namespace.
       - name: Deploy Kyverno & Guardrail Policies
-        if: ${{ inputs.kyverno }}
+        if: ${{ inputs.deploy-everything || inputs.security }}
         working-directory: addons/kyverno
         run: ./init.sh
 
       - name: Deploy Kyverno Policy Reporter
-        if: ${{ inputs.kyverno }}
+        if: ${{ inputs.deploy-everything || inputs.security }}
         working-directory: addons/policy-reporter
         run: |
           ./init.sh gateway-values.yaml
@@ -340,13 +353,13 @@ jobs:
     needs: [deploy, bootstrap]
     timeout-minutes: 30
     env:
-      EXTERNAL_DNS: ${{ inputs.external-dns }}
-      CERT_MANAGER: ${{ inputs.cert-manager }}
-      ARGOCD: ${{ inputs.argocd }}
-      MONITORING: ${{ inputs.monitoring }}
-      LOGGING: ${{ inputs.logging }}
-      KYVERNO: ${{ inputs.kyverno }}
-      TRIVY_OPERATOR: ${{ inputs.trivy-operator }}
+      EXTERNAL_DNS: ${{ inputs.deploy-everything || inputs.external-dns }}
+      CERT_MANAGER: ${{ inputs.deploy-everything || inputs.cert-manager }}
+      ARGOCD: ${{ inputs.deploy-everything || inputs.argocd }}
+      MONITORING: ${{ inputs.deploy-everything || inputs.monitoring }}
+      LOGGING: ${{ inputs.deploy-everything || inputs.logging }}
+      SECURITY: ${{ inputs.deploy-everything || inputs.security }}
+      OTEL_DEMO: ${{ inputs.opentelemetry-demo }}
 
     steps:
       - name: Configure AWS Credentials via OIDC
@@ -366,8 +379,8 @@ jobs:
           [ "$ARGOCD" = "true" ]       && NAMESPACES="$NAMESPACES argocd"
           [ "$MONITORING" = "true" ]   && NAMESPACES="$NAMESPACES monitoring"
           [ "$LOGGING" = "true" ]      && NAMESPACES="$NAMESPACES loki"
-          [ "$KYVERNO" = "true" ]      && NAMESPACES="$NAMESPACES kyverno"
-          [ "$TRIVY_OPERATOR" = "true" ] && NAMESPACES="$NAMESPACES trivy-system"
+          [ "$SECURITY" = "true" ]     && NAMESPACES="$NAMESPACES kyverno trivy-system"
+          [ "$OTEL_DEMO" = "true" ] && NAMESPACES="$NAMESPACES otel-demo"
           for ns in $NAMESPACES; do
             echo "--- $ns"
             RESOURCES=$(kubectl get deploy,statefulset,daemonset -n "$ns" -o name)
@@ -378,31 +391,31 @@ jobs:
           done
 
       - name: Kyverno guardrail policies ready
-        if: ${{ inputs.kyverno }}
+        if: ${{ inputs.deploy-everything || inputs.security }}
         run: kubectl wait --for=condition=Ready clusterpolicy --all --timeout=3m
 
       - name: Shared Gateway programmed
         run: kubectl wait --for=condition=Programmed gateway/shared-gateway -n gateway --timeout=3m
 
       - name: TLS certificates issued & listeners programmed
-        if: ${{ inputs.cert-manager && inputs.external-dns }}
+        if: ${{ (inputs.deploy-everything || inputs.cert-manager) && (inputs.deploy-everything || inputs.external-dns) }}
         run: |
           NAMESPACES="kube-system"
           [ "$ARGOCD" = "true" ]     && NAMESPACES="$NAMESPACES argocd"
           [ "$MONITORING" = "true" ] && NAMESPACES="$NAMESPACES monitoring"
-          [ "$KYVERNO" = "true" ]    && NAMESPACES="$NAMESPACES kyverno"
+          [ "$SECURITY" = "true" ]   && NAMESPACES="$NAMESPACES kyverno"
           for ns in $NAMESPACES; do
             kubectl wait --for=condition=Ready certificate --all -n "$ns" --timeout=10m
             kubectl wait --for=condition=Programmed listenerset --all -n "$ns" --timeout=2m
           done
 
       - name: Platform UIs reachable over HTTPS
-        if: ${{ inputs.cert-manager && inputs.external-dns }}
+        if: ${{ (inputs.deploy-everything || inputs.cert-manager) && (inputs.deploy-everything || inputs.external-dns) }}
         run: |
           URLS="https://gateway-hubble.sctp-sandbox.com"
           [ "$ARGOCD" = "true" ]     && URLS="$URLS https://gateway-argocd.sctp-sandbox.com"
           [ "$MONITORING" = "true" ] && URLS="$URLS https://gateway-admin-prom.sctp-sandbox.com https://gateway-admin-grafana.sctp-sandbox.com"
-          [ "$KYVERNO" = "true" ]    && URLS="$URLS https://gateway-policy-reporter.sctp-sandbox.com"
+          [ "$SECURITY" = "true" ]   && URLS="$URLS https://gateway-policy-reporter.sctp-sandbox.com"
           for url in $URLS; do
             curl -sSfL -o /dev/null --connect-timeout 15 --retry 10 --retry-delay 15 --retry-all-errors "$url"
             echo "OK  $url"
