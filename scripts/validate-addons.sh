@@ -100,6 +100,7 @@ ADDONS=(
   kube-prometheus-stack
   kyverno
   metrics-server
+  keda
   policy-reporter
   loki
   opentelemetry-demo
