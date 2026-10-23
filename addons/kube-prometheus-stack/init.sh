@@ -12,11 +12,16 @@ case "$VALUES_FILE" in
 esac
 
 # renovate: datasource=helm depName=kube-prometheus-stack registryUrl=https://prometheus-community.github.io/helm-charts
+# Loki and Promtail JSON is injected with --set-file, not --values. Those files
+# contain Grafana variables ($namespace, $job, $__range). A --values file is
+# envsubst'd by scripts/validate-addons.sh, which would erase them.
 helm upgrade --install kube-prometheus-stack kube-prometheus-stack --repo https://prometheus-community.github.io/helm-charts --version 86.2.2 \
   --create-namespace \
   --namespace monitoring \
   --values "$VALUES_FILE" \
   --values "$ROOT/dashboards-values.yaml" \
-  --values "$FLAVOR_DASHBOARDS"
+  --values "$FLAVOR_DASHBOARDS" \
+  --set-file grafana.dashboards.devops.loki-logs.json="$ROOT/dashboards/loki-logs.json" \
+  --set-file grafana.dashboards.devops.promtail.json="$ROOT/dashboards/promtail.json"
 
 

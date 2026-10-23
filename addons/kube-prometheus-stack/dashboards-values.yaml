@@ -20,7 +20,8 @@
 # datasourceRewrites is not a chart setting. It only holds YAML anchors for the
 # placeholder substitutions the download script applies. Prometheus is the
 # datasource kube-prometheus-stack provisions (uid prometheus). Loki is added
-# below (uid loki) for the log panels.
+# below (uid loki) for panels that query logs. The Loki and Promtail boards
+# are local JSON, already pointed at those uids, so they are not downloaded.
 
 datasourceRewrites:
   prometheusInput: &dsPrometheus
@@ -32,17 +33,6 @@ datasourceRewrites:
   kyverno: &dsKyverno
     - name: DS_PROMETHEUS_KYVERNO
       value: prometheus
-  lokiAndPrometheus: &dsLokiProm
-    - name: DS_PROMETHEUS
-      value: prometheus
-    - name: DS_LOKI
-      value: loki
-  lokiLogs: &dsLokiLogs
-    - name: datasource
-      value: prometheus
-    - name: logs
-      value: loki
-
 grafana:
   additionalDataSources:
     - name: Loki
@@ -125,13 +115,7 @@ grafana:
       argocd:
         url: https://raw.githubusercontent.com/argoproj/argo-cd/v3.4.3/examples/dashboard.json
         datasource: *dsVariable
-      # Loki chart 6.29.0. The operational mixin dashboards assume SimpleScalable
-      # job labels, which do not match this Distributed install.
-      loki-logs:
-        url: https://raw.githubusercontent.com/grafana/loki/helm-loki-6.29.0/production/helm/loki/src/dashboards/loki-logs.json
-        datasource: *dsLokiLogs
-      # Promtail chart 6.7.4
-      promtail:
-        gnetId: 20881
-        revision: 1
-        datasource: *dsLokiProm
+      # Loki and Promtail are not listed here. init.sh mounts
+      # dashboards/loki-logs.json and dashboards/promtail.json with --set-file.
+      # The upstream boards select a cluster label and a shared job that this
+      # install does not have, so the fixed JSON is what Grafana provisions.
