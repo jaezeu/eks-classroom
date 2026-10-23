@@ -4,11 +4,6 @@ name: Cilium CNI Cluster Creation & Bootstrap
 on:
   workflow_dispatch:
     inputs:
-      deploy-everything:
-        type: boolean
-        description: "Deploy everything?"
-        default: false
-        required: true
       region:
         type: choice
         options:
@@ -17,6 +12,11 @@ on:
         description: "AWS region"
         required: true
         default: ap-southeast-1
+      deploy-everything:
+        type: boolean
+        description: "Deploy everything? Other than OTEL demo"
+        default: false
+        required: true
       external-dns:
         type: boolean
         description: "Deploy ExternalDNS?"
