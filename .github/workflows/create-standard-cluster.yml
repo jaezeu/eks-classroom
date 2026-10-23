@@ -49,7 +49,17 @@ on:
         required: true
       kyverno:
         type: boolean
-        description: "Deploy Kyverno & guardrail policies?"
+        description: "Deploy Kyverno, guardrail policies, and Policy Reporter?"
+        default: false
+        required: true
+      metrics-server:
+        type: boolean
+        description: "Deploy Metrics Server?"
+        default: false
+        required: true
+      trivy-operator:
+        type: boolean
+        description: "Deploy Trivy Operator?"
         default: false
         required: true
   # Mirrors the dispatch inputs so the rehearsal workflow can call this
@@ -82,6 +92,12 @@ on:
         type: boolean
         default: false
       kyverno:
+        type: boolean
+        default: false
+      metrics-server:
+        type: boolean
+        default: false
+      trivy-operator:
         type: boolean
         default: false
 
@@ -234,12 +250,29 @@ jobs:
           mv updated-values.yaml values.yaml
           ./init.sh
 
-      # Kyverno must be last: its policies enforce namespace naming and block
-      # deletions in protected namespaces, which would interfere with the
-      # add-on installs above.
+      - name: Deploy Metrics Server
+        if: ${{ inputs.metrics-server }}
+        working-directory: addons/metrics-server
+        run: ./init.sh
+
+      # Before Kyverno: the namespace-name policy would reject trivy-system.
+      - name: Deploy Trivy Operator
+        if: ${{ inputs.trivy-operator }}
+        working-directory: addons/trivy-operator
+        run: ./init.sh
+
+      # Kyverno must be last among namespace-creating installs: its policies
+      # enforce namespace naming and block deletions in protected namespaces.
+      # Policy Reporter follows it, in the existing kyverno namespace, because
+      # a new namespace would be rejected and it needs the PolicyReport CRDs.
       - name: Deploy Kyverno & Guardrail Policies
         if: ${{ inputs.kyverno }}
         working-directory: addons/kyverno
+        run: ./init.sh
+
+      - name: Deploy Kyverno Policy Reporter
+        if: ${{ inputs.kyverno }}
+        working-directory: addons/policy-reporter
         run: ./init.sh
 
   verify:
@@ -255,6 +288,7 @@ jobs:
       MONITORING: ${{ inputs.monitoring }}
       LOGGING: ${{ inputs.logging }}
       KYVERNO: ${{ inputs.kyverno }}
+      TRIVY_OPERATOR: ${{ inputs.trivy-operator }}
 
     steps:
       - name: Configure AWS Credentials via OIDC
@@ -276,6 +310,7 @@ jobs:
           [ "$MONITORING" = "true" ]    && NAMESPACES="$NAMESPACES monitoring"
           [ "$LOGGING" = "true" ]       && NAMESPACES="$NAMESPACES loki"
           [ "$KYVERNO" = "true" ]       && NAMESPACES="$NAMESPACES kyverno"
+          [ "$TRIVY_OPERATOR" = "true" ] && NAMESPACES="$NAMESPACES trivy-system"
           for ns in $NAMESPACES; do
             echo "--- $ns"
             RESOURCES=$(kubectl get deploy,statefulset,daemonset -n "$ns" -o name)
@@ -296,21 +331,23 @@ jobs:
             --for=jsonpath='{.status.loadBalancer.ingress[0].hostname}' --timeout=5m
 
       - name: Platform certificates issued
-        if: ${{ inputs.nginx-ingress && inputs.cert-manager && inputs.external-dns && (inputs.argocd || inputs.monitoring) }}
+        if: ${{ inputs.nginx-ingress && inputs.cert-manager && inputs.external-dns && (inputs.argocd || inputs.monitoring || inputs.kyverno) }}
         run: |
           NAMESPACES=""
           [ "$ARGOCD" = "true" ]     && NAMESPACES="$NAMESPACES argocd"
           [ "$MONITORING" = "true" ] && NAMESPACES="$NAMESPACES monitoring"
+          [ "$KYVERNO" = "true" ]    && NAMESPACES="$NAMESPACES kyverno"
           for ns in $NAMESPACES; do
             kubectl wait --for=condition=Ready certificate --all -n "$ns" --timeout=10m
           done
 
       - name: Platform UIs reachable over HTTPS
-        if: ${{ inputs.nginx-ingress && inputs.cert-manager && inputs.external-dns && (inputs.argocd || inputs.monitoring) }}
+        if: ${{ inputs.nginx-ingress && inputs.cert-manager && inputs.external-dns && (inputs.argocd || inputs.monitoring || inputs.kyverno) }}
         run: |
           URLS=""
           [ "$ARGOCD" = "true" ]     && URLS="$URLS https://admin-argocd.sctp-sandbox.com"
           [ "$MONITORING" = "true" ] && URLS="$URLS https://admin-prom.sctp-sandbox.com https://admin-grafana.sctp-sandbox.com"
+          [ "$KYVERNO" = "true" ]    && URLS="$URLS https://admin-policy-reporter.sctp-sandbox.com"
           for url in $URLS; do
             curl -sSfL -o /dev/null --connect-timeout 15 --retry 10 --retry-delay 15 --retry-all-errors "$url"
             echo "OK  $url"
