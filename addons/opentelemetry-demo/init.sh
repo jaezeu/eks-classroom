@@ -15,4 +15,4 @@ helm upgrade --install opentelemetry-demo opentelemetry-demo \
 # Grafana's dashboard sidecar searches every namespace. Its datasource sidecar
 # only searches monitoring, so both objects live there. The dashboard JSON has
 # Grafana variables; do not pass grafana.yaml through envsubst.
-kubectl apply -f "$ROOT/grafana.yaml"
+kubectl apply --server-side --force-conflicts -f "$ROOT/grafana.yaml"
