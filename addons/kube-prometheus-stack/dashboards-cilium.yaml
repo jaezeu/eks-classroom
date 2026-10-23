@@ -29,12 +29,6 @@ grafana:
         datasource:
           - name: DS_PROMETHEUS
             value: prometheus
-      keda: 
-        gnetId: 23951
-        revision: 1
-        datasource:
-          - name: DS_PROMETHEUS
-            value: prometheus
     security:
       # Tetragon publishes metrics but no dashboard of its own. 25789 is the
       # Prometheus dashboard on grafana.com.
