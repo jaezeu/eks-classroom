@@ -102,6 +102,7 @@ ADDONS=(
   metrics-server
   policy-reporter
   loki
+  opentelemetry-demo
   nginx-ingress
   r53-externaldns
   trivy-operator

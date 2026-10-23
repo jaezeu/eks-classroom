@@ -223,4 +223,25 @@ extraObjects:
             - namespaceSelector:
                 matchLabels:
                   kubernetes.io/metadata.name: monitoring
+  - apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: loki-ingress-otel-demo
+      namespace: loki
+    spec:
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: loki
+          app.kubernetes.io/instance: loki
+          app.kubernetes.io/component: gateway
+      policyTypes:
+        - Ingress
+      ingress:
+        - from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: otel-demo
+          ports:
+            - port: 8080
+              protocol: TCP
 

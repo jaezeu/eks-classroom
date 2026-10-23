@@ -45,3 +45,9 @@ variable "deploy_cluster_addons" {
   description = "Deploy cluster addons (base and optionally default network addons)"
   default     = true
 }
+
+variable "node_instance_types" {
+  description = "Instance types for the managed node group. The Cilium workflow passes m6g.xlarge only when the OpenTelemetry demo is selected."
+  type        = list(string)
+  default     = ["m6g.large"]
+}

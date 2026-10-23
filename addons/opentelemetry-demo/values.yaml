@@ -1,0 +1,61 @@
+# OpenTelemetry demo chart 0.42.6 (app 3.1.0).
+# Prometheus, Grafana, and OpenSearch stay off. The collector remains a
+# DaemonSet. Every shop component stays enabled.
+#
+# Metrics: the collector pushes OTLP to kube-prometheus-stack, which has the
+# OTLP receiver and the resource attributes the demo dashboards promote.
+# Logs: otlp_http to the Loki gateway. Loki already allows structured metadata.
+# Traces: the chart Jaeger. Helm replaces extraEnv as a list, so the chart
+# entries are copied and PROMETHEUS_ADDR points at the in-cluster Prometheus.
+#
+# Install after Prometheus and Loki, and before Kyverno. The namespace-name
+# policy rejects otel-demo. This add-on is not part of Deploy everything.
+
+prometheus:
+  enabled: false
+
+grafana:
+  enabled: false
+
+opensearch:
+  enabled: false
+
+jaeger:
+  enabled: true
+  jaeger:
+    extraEnv:
+      - name: MEMORY_MAX_TRACES
+        value: "25000"
+      - name: PROMETHEUS_ADDR
+        value: kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+      - name: OTEL_COLLECTOR_HOST
+        value: otel-collector
+      - name: OTEL_COLLECTOR_PORT_HTTP
+        value: "4318"
+      - name: JAEGER_HOST
+        value: "0.0.0.0"
+      - name: JAEGER_GRPC_PORT
+        value: "4317"
+
+opentelemetry-collector:
+  config:
+    exporters:
+      # Chart name is otlp_http. otlphttp is the old name and is rewritten.
+      otlp_http/prometheus:
+        endpoint: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/otlp
+        tls:
+          insecure: true
+      otlp_http/loki:
+        endpoint: http://loki-gateway.loki.svc.cluster.local/otlp
+        tls:
+          insecure: true
+    service:
+      pipelines:
+        metrics:
+          exporters:
+            - otlp_http/prometheus
+            - debug
+        logs:
+          exporters:
+            - otlp_http/loki
+            - debug
