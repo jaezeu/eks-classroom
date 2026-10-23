@@ -8,6 +8,9 @@ prometheus:
     # Chart ServiceMonitors (Prometheus, Alertmanager, Grafana, node-exporter,
     # kube-state-metrics, kubelet) stay at the chart defaults, which are on.
     serviceMonitorSelectorNilUsesHelmValues: false
+    # Cart Service Exemplars reads exemplars from the OTLP ingest.
+    enableFeatures:
+      - exemplar-storage
   ingress:
     enabled: false
   networkPolicy:
@@ -40,8 +43,8 @@ grafana:
     server:
       root_url: https://gateway-admin-grafana.sctp-sandbox.com
   # Ingress stays open so the Cilium gateway and probes can reach the UI.
-  # Egress is DNS plus Prometheus, Alertmanager, the Loki gateway, and 443
-  # for the dashboard download.
+  # Egress is DNS plus Prometheus, Alertmanager, the Loki gateway, Jaeger,
+  # and 443 for the dashboard download.
   networkPolicy:
     enabled: true
     egress:
@@ -57,6 +60,15 @@ grafana:
           protocol: TCP
         - port: 9093
           protocol: TCP
+        - port: 16686
+          protocol: TCP
+  sidecar:
+    datasources:
+      # Exemplar dots on the cart dashboard open this datasource.
+      exemplarTraceIdDestinations:
+        datasourceUid: jaeger
+        traceIdLabelName: trace_id
+        urlDisplayLabel: View trace
 
 prometheus-node-exporter:
   extraArgs:

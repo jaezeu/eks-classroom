@@ -38,7 +38,7 @@ module "eks" {
       # AMI release deliberately floats to latest so recreated clusters get current kernel patches.
       # Pin ami_release_version if node behavior must be reproducible (Cilium/Tetragon are kernel-sensitive).
       ami_type       = "AL2023_ARM_64_STANDARD" # Update to AL2023_x86_64_STANDARD if using non-graviton instances
-      instance_types = ["m6g.large"]
+      instance_types = var.node_instance_types
       min_size       = 3
       max_size       = 5
       desired_size   = 3

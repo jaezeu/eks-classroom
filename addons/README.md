@@ -16,6 +16,7 @@ directory is self-contained: a `values.yaml` (Helm configuration) and an
 | [r53-externaldns](r53-externaldns/) | `external-dns` | external-dns/external-dns | 1.21.1 | Route 53 DNS automation |
 | [kube-prometheus-stack](kube-prometheus-stack/) | `monitoring` | prometheus-community/kube-prometheus-stack | 86.2.2 | Prometheus, Grafana, Alertmanager |
 | [loki](loki/) | `loki` | grafana/loki (+ promtail) | 6.29.0 | Log aggregation (S3 backend) |
+| [opentelemetry-demo](opentelemetry-demo/) | `otel-demo` | open-telemetry/opentelemetry-demo | 0.42.6 | Astronomy shop on the Cilium workflow. Uses this Prometheus, Grafana, Loki, and Jaeger. Selects m6g.xlarge. Not part of Deploy everything. |
 | [ebs-csi-driver](ebs-csi-driver/) | `kube-system` | aws-ebs-csi-driver | 2.61.1 | EBS volumes; default StorageClass `gp3` |
 | [metrics-server](metrics-server/) | `kube-system` | metrics-server/metrics-server | 3.14.0 | `kubectl top` and HorizontalPodAutoscaler metrics |
 | [kyverno](kyverno/) | `kyverno` | kyverno/kyverno | 3.8.1 | Admission controller + [guardrail policies](../kyverno-policies/) |
@@ -68,14 +69,14 @@ Order matters, since several add-ons consume resources created by others:
 5. **loki**: needs its IRSA role and the two S3 buckets created by Terraform (`enable_loki_s3`).
 6. **tetragon**: Cilium clusters only; ships ServiceMonitors scraped by Prometheus (install after monitoring).
 7. **ebs-csi-driver**: needs its IRSA role. It also installs the default `gp3` StorageClass, so anything that asks for a volume can bind one.
-8. **metrics-server**: `kube-system`, which already exists, so the namespace-name policy does not apply. Gives `kubectl top` and the HorizontalPodAutoscaler API.
-9. **trivy-operator**: scans workloads cluster-wide. Install before Kyverno; the namespace-name policy would reject `trivy-system`.
-10. **kyverno**: last namespace-creating install. Its [policies](../kyverno-policies/) enforce namespace naming and block deletions in protected namespaces.
-11. **policy-reporter**: only when Kyverno is on, and after it. The release is installed into the existing `kyverno` namespace (a new namespace would be rejected) and needs the PolicyReport CRDs.
+8. **metrics-server**: installed with Prometheus. `kube-system` already exists, so the namespace-name policy does not apply. Gives `kubectl top` and the HorizontalPodAutoscaler API.
+9. **security** (Trivy Operator, then Kyverno, then Policy Reporter): Trivy is first because the namespace-name policy would reject `trivy-system`. Kyverno is last among namespace-creating installs. Its [policies](../kyverno-policies/) enforce namespace naming and block deletions in protected namespaces. Policy Reporter is installed into the existing `kyverno` namespace (a new namespace would be rejected) and needs the PolicyReport CRDs.
+10. **opentelemetry-demo**: Cilium workflow only, after Prometheus and Loki, and before Kyverno. The namespace-name policy would reject `otel-demo`. Selecting it creates the node group as `m6g.xlarge`. Not included in Deploy everything.
 
 Add-on charts that expose metrics ship a ServiceMonitor (`ingress-nginx`,
 `external-dns`, `cert-manager`, `argo-cd`, Cilium/Hubble, EBS CSI, Loki,
-Promtail, Kyverno, Metrics Server, Policy Reporter, Tetragon, Trivy Operator). Each of those `init.sh` scripts applies the
+Promtail, Kyverno, Metrics Server, Policy Reporter, Tetragon, Trivy Operator).
+Each of those `init.sh` scripts applies the
 Prometheus Operator CRDs from kube-prometheus-stack `86.2.2` when they are
 not already installed, so the monitors can be created before the monitoring
 stack itself. The stack selects every ServiceMonitor
@@ -84,9 +85,11 @@ stack itself. The stack selects every ServiceMonitor
 Grafana files the add-ons that cluster installs into folders when its pod
 starts ([`kube-prometheus-stack/dashboards-values.yaml`](kube-prometheus-stack/dashboards-values.yaml)).
 The chart's own Kubernetes dashboards go in **Admin**. Both clusters get
-**Network** (external-dns), **Security** (cert-manager, Kyverno, Trivy
-Operator), and **DevOps** (Argo CD, Loki, Promtail). The standard cluster also
-gets the ingress-nginx dashboards; the Cilium cluster gets Cilium, Hubble, and
+**Network** (external-dns, and the demo's NGINX board), **Security**
+(cert-manager, Kyverno, Trivy Operator), and **DevOps** (Argo CD, Loki,
+Promtail, and the demo's application boards). The demo's Linux board goes in
+**Admin** with the node dashboards. The standard cluster also gets the
+ingress-nginx dashboards; the Cilium cluster gets Cilium, Hubble, and
 Tetragon instead. The download runs from the Grafana init container, so the
 pod needs outbound access to grafana.com and GitHub, and a failed fetch stops
 Grafana from starting.
@@ -185,9 +188,9 @@ ingress-nginx, and cilium-envoy can all reach it.
 **Grafana.** Kubernetes NetworkPolicy only. Ingress stays at the chart
 default (`allowExternal: true`) on container port 3000, so the ingress, the
 Cilium gateway, and probes can open the UI. Egress is enabled and limited to
-the chart's DNS rule plus TCP 80, 443, 8080, 9090, and 9093. Those are
+the chart's DNS rule plus TCP 80, 443, 8080, 9090, 9093, and 16686. Those are
 Prometheus (9090), Alertmanager (9093), the Loki gateway (service port 80,
-container port 8080), and 443 for the dashboard download. The download runs
+container port 8080), Jaeger (16686), and 443 for the dashboard download. The download runs
 in the Grafana pod, so a 443 deny stops Grafana from starting.
 
 **node-exporter.** Ingress allows port 9100 from any source. The policy type
@@ -238,6 +241,8 @@ clusters. Cilium enforces them alongside the Cilium policies:
 - `loki-ingress-monitoring`: every pod in the namespace accepts ingress from
   the `monitoring` namespace, so Prometheus can scrape canary and the caches
   and Grafana can query the gateway.
+- `loki-ingress-otel-demo`: the gateway accepts TCP 8080 from the `otel-demo`
+  namespace, so the collector can push OTLP logs.
 
 Promtail has no Cilium flavor. Its policy allows same-namespace traffic
 (the push to the Loki gateway), DNS, metrics from any source, and the
@@ -246,6 +251,26 @@ Kubernetes API. The chart default API port is 8443; EKS serves the API on
 node, not over the kubelet port. The same-namespace rule uses
 `podSelector: {}`, which also selects the Loki pods. It adds an allow and
 does not remove the Loki, DNS, or 443 allows.
+
+### OpenTelemetry demo
+
+Chart `0.42.6`. The demo Prometheus, Grafana, and OpenSearch subcharts are
+off. The collector DaemonSet pushes metrics with OTLP to the in-cluster
+Prometheus (`enableOTLPReceiver`, with the same promoted resource attributes
+as the demo Prometheus) and pushes logs to
+`http://loki-gateway.loki.svc.cluster.local/otlp`. Jaeger stays in the demo
+namespace. Grafana gets a Jaeger datasource only when this add-on is applied,
+and Prometheus stores exemplars (`exemplar-storage`).
+
+The Cilium workflow is the only one that offers this add-on. Selecting it
+passes `node_instance_types=["m6g.xlarge"]` to Terraform. The chart dashboards
+are loaded with the Prometheus uid set to `prometheus` and the Jaeger uid set
+to `jaeger`. Linux is filed in **Admin**, image-provider NGINX in **Network**,
+and cart exemplars, spanmetrics, the demo board, APM, the collector, and
+PostgreSQL in **DevOps**.
+OpenSearch log panels are LogQL on the demo board and dropped where the panel
+was OpenSearch-only. The quote panel filtered `job="quote"` and is removed.
+PostgreSQL queries `k8s_deployment_name` because astronomy-db is a Deployment.
 
 ### cert-manager
 
