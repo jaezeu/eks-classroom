@@ -5,7 +5,7 @@
 VALUES_FILE="${1:-values.yaml}"
 
 # renovate: datasource=helm depName=external-dns registryUrl=https://kubernetes-sigs.github.io/external-dns/
-helm upgrade --install external-dns external-dns --repo https://kubernetes-sigs.github.io/external-dns/ --version 1.21.1 \
+helm upgrade --install external-dns external-dns --repo https://kubernetes-sigs.github.io/external-dns/ --version 1.23.0 \
   --namespace external-dns \
   --create-namespace \
   --values "$VALUES_FILE"
