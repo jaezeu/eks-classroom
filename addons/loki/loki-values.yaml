@@ -143,7 +143,7 @@ write:
 singleBinary:
  replicas: 0
 
-# loki 6.29.0 still creates ServiceMonitors from monitoring.serviceMonitor
+# loki 6.55.0 still creates ServiceMonitors from monitoring.serviceMonitor
 # (marked deprecated in the chart, but it is the key this version honors).
 # metricsInstance is the Grafana Agent CR; leave it off so only Prometheus scrapes.
 monitoring:

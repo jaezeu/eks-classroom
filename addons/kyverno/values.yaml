@@ -1,4 +1,4 @@
-# kyverno 3.8.1: each controller has its own serviceMonitor.enabled.
+# kyverno 3.9.2: each controller has its own serviceMonitor.enabled.
 # metricsService is created by default, so the monitors have a port to scrape.
 admissionController:
   # Chart default is a 384Mi limit. Admission of large objects (kube-prometheus-stack

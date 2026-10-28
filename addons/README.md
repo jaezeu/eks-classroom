@@ -10,21 +10,21 @@ directory is self-contained: a `values.yaml` (Helm configuration) and an
 
 | Add-on | Namespace | Chart | Version | Purpose |
 |--------|-----------|-------|---------|---------|
-| [argocd](argocd/) | `argocd` | argo/argo-cd | 9.5.21 | GitOps continuous delivery |
-| [cert-manager](cert-manager/) | `cert-manager` | jetstack/cert-manager | v1.20.2 | TLS certificates (Let's Encrypt) |
+| [argocd](argocd/) | `argocd` | argo/argo-cd | 10.11.6 | GitOps continuous delivery |
+| [cert-manager](cert-manager/) | `cert-manager` | jetstack/cert-manager | v1.21.3 | TLS certificates (Let's Encrypt) |
 | [nginx-ingress](nginx-ingress/) | `ingress-nginx` | ingress-nginx/ingress-nginx | 4.15.1 | HTTP(S) ingress |
-| [r53-externaldns](r53-externaldns/) | `external-dns` | external-dns/external-dns | 1.21.1 | Route 53 DNS automation |
-| [kube-prometheus-stack](kube-prometheus-stack/) | `monitoring` | prometheus-community/kube-prometheus-stack | 86.2.2 | Prometheus, Grafana, Alertmanager |
-| [loki](loki/) | `loki` | grafana/loki (+ promtail) | 6.29.0 | Log aggregation (S3 backend) |
+| [r53-externaldns](r53-externaldns/) | `external-dns` | external-dns/external-dns | 1.23.0 | Route 53 DNS automation |
+| [kube-prometheus-stack](kube-prometheus-stack/) | `monitoring` | prometheus-community/kube-prometheus-stack | 92.14.1 | Prometheus, Grafana, Alertmanager |
+| [loki](loki/) | `loki` | grafana/loki (+ promtail) | 6.55.0 | Log aggregation (S3 backend) |
 | [opentelemetry-demo](opentelemetry-demo/) | `otel-demo` | open-telemetry/opentelemetry-demo | 0.42.6 | Astronomy shop on the Cilium workflow. Uses this Prometheus, Grafana, Loki, and Jaeger. Selects m6g.xlarge. |
-| [ebs-csi-driver](ebs-csi-driver/) | `kube-system` | aws-ebs-csi-driver | 2.61.1 | EBS volumes; default StorageClass `gp3` |
+| [ebs-csi-driver](ebs-csi-driver/) | `kube-system` | aws-ebs-csi-driver | 2.67.2 | EBS volumes; default StorageClass `gp3` |
 | [metrics-server](metrics-server/) | `kube-system` | metrics-server/metrics-server | 3.14.0 | `kubectl top` and HorizontalPodAutoscaler metrics |
 | [keda](keda/) | `monitoring` | kedacore/keda | 2.21.0 | Event-driven autoscaling |
-| [kyverno](kyverno/) | `kyverno` | kyverno/kyverno | 3.8.1 | Admission controller + [guardrail policies](../kyverno-policies/) |
-| [kyverno](kyverno/) (Policy Reporter) | `kyverno` | policy-reporter/policy-reporter | 3.11.1 | Kyverno PolicyReport UI; installed by `kyverno/init.sh` |
+| [kyverno](kyverno/) | `kyverno` | kyverno/kyverno | 3.9.2 | Admission controller + [guardrail policies](../kyverno-policies/) |
+| [kyverno](kyverno/) (Policy Reporter) | `kyverno` | policy-reporter/policy-reporter | 3.11.2 | Kyverno PolicyReport UI; installed by `kyverno/init.sh` |
 | [trivy-operator](trivy-operator/) | `trivy-system` | aqua/trivy-operator | 0.37.0 | Workload vulnerability and config-audit reports |
-| [cilium](cilium/) | `kube-system` | cilium/cilium | 1.20.0-pre.4 | eBPF CNI, Hubble, Gateway API + ListenerSet (Cilium clusters) |
-| [cilium/tetragon](cilium/tetragon/) | `kube-system` | cilium/tetragon | v1.5.0 | eBPF runtime security (Cilium clusters) |
+| [cilium](cilium/) | `kube-system` | cilium/cilium | 1.20.4 | eBPF CNI, Hubble, Gateway API + ListenerSet (Cilium clusters) |
+| [cilium/tetragon](cilium/tetragon/) | `kube-system` | cilium/tetragon | 1.7.1 | eBPF runtime security (Cilium clusters) |
 
 > **Cilium** is a special case: its `values.yaml`/`init.sh` live here, but it is
 > installed by the [Cilium cluster workflow](../.github/workflows/create-cilium-cluster.yml)
@@ -80,7 +80,8 @@ Promtail, Kyverno, Metrics Server, KEDA, Policy Reporter, Tetragon, Trivy Operat
 Both cluster workflows run
 [`kube-prometheus-stack/install-crds.sh`](kube-prometheus-stack/install-crds.sh)
 once before the first add-on. It applies the Prometheus Operator CRDs from
-kube-prometheus-stack `86.2.2` when they are not already installed, so the
+kube-prometheus-stack `92.14.1` (the same pin as `init.sh`; Renovate updates
+both) when they are not already installed, so the
 monitors can be created before the monitoring stack itself. Running an
 `init.sh` by hand on a cluster without those CRDs needs that script first.
 The stack selects every ServiceMonitor
@@ -125,7 +126,7 @@ objects are installed and not applied there.
 |-----------|--------------|----------------|------------------|
 | Prometheus | `prometheus.networkPolicy` (`flavor`) | CiliumNetworkPolicy | NetworkPolicy |
 | Prometheus Operator | `prometheusOperator.networkPolicy` (`flavor`) | CiliumNetworkPolicy | NetworkPolicy |
-| kube-state-metrics | `kube-state-metrics.networkPolicy` (`flavor`) | CiliumNetworkPolicy | NetworkPolicy |
+| kube-state-metrics | `kube-state-metrics.networkPolicy` | NetworkPolicy | NetworkPolicy |
 | Loki | `networkPolicy` (`flavor`) | CiliumNetworkPolicy | NetworkPolicy |
 | KEDA (operator, metrics apiserver, webhooks) | `networkPolicy` (`flavor`) | CiliumNetworkPolicy | NetworkPolicy |
 | Alertmanager | `alertmanager.networkPolicy` | NetworkPolicy | NetworkPolicy |
@@ -138,11 +139,11 @@ objects are installed and not applied there.
 | ingress-nginx | `controller.networkPolicy` | not installed | NetworkPolicy |
 | Policy Reporter core and Kyverno plugin | `networkPolicy` | NetworkPolicy | NetworkPolicy |
 | Policy Reporter UI | chart policy left off (empty `from`) | — | — |
-| external-dns 1.21.1 | none | — | — |
-| EBS CSI driver 2.61.1 | none | — | — |
+| external-dns 1.23.0 | none | — | — |
+| EBS CSI driver 2.67.2 | none | — | — |
 | Metrics Server 3.14.0 | none | — | — |
 | Trivy Operator 0.37.0 | none | — | — |
-| Tetragon v1.5.0 | none | — | — |
+| Tetragon 1.7.1 | none | — | — |
 | OpenTelemetry demo | CiliumNetworkPolicy manifests | CiliumNetworkPolicy | not installed |
 
 Cilium itself is the policy engine and is not wrapped in a default-deny
@@ -162,7 +163,7 @@ and CoreDNS), `host` and `remote-node` (kubelet and node-exporter), and
 `kube-apiserver` (the EKS API). Ingress is ports 9090 and 8080 with no source
 selector, so probes, Grafana, and the Cilium gateway can connect.
 
-**Prometheus Operator.** Chart 86.2.2 serves the operator over TLS on port
+**Prometheus Operator.** Chart 92.14.1 serves the operator over TLS on port
 10250 (`--web.listen-address=:10250`). Probes are HTTPS `GET /healthz` on
 that port. The Kubernetes policy allows port 10250 from any source and allows
 all egress, which covers probes, scrapes, the API, and DNS. The Cilium
@@ -178,10 +179,10 @@ types. With egress unset, every outbound connection is denied and the API
 watch fails. Egress is TCP 443 (EKS API) plus DNS 53 TCP and UDP. Liveness
 uses the `http` port (8080). Readiness uses the `metrics` port (8081). The
 chart adds 8081 to the policy only when `selfMonitor.enabled` is true, so
-that is turned on for both clusters. On the Cilium template,
-`cilium.kubeApiServerSelector` replaces the whole egress list, so it contains
-both `kube-apiserver` and DNS. Ingress is ports 8080 and 8081 with no source
-selector.
+that is turned on for both clusters. The kube-state-metrics subchart (8.x
+since kube-prometheus-stack 92) no longer has a Cilium flavor, so both
+clusters use the same Kubernetes egress list; Cilium enforces it. Ingress is
+ports 8080 and 8081 with no source selector.
 
 **Alertmanager.** Kubernetes NetworkPolicy only. The default policy type is
 Ingress, so notifications, DNS, and clustering egress stay open. Default

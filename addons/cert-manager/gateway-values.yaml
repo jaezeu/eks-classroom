@@ -24,17 +24,20 @@ cainjector:
 config:
   apiVersion: controller.config.cert-manager.io/v1alpha1
   kind: ControllerConfiguration
-  # Reconcile Gateway resources (ACME gatewayHTTPRoute solver + gateway-shim)
-  enableGatewayAPI: true
-  # Also reconcile ListenerSet resources (alpha since cert-manager 1.20);
-  # this is what issues the certs referenced by each add-on's ListenerSet.
-  # Requires the Gateway API v1.5+ standard-channel CRDs (applied by the
-  # workflow before the bootstrap job runs).
-  enableGatewayAPIListenerSet: true
+  # cert-manager 1.21 moved enableGatewayAPI and enableGatewayAPIListenerSet
+  # under gatewayAPI (the old fields still work but are deprecated).
+  gatewayAPI:
+    # Reconcile Gateway resources (ACME gatewayHTTPRoute solver + gateway-shim)
+    enabled: true
+    # Also reconcile ListenerSet resources (alpha since cert-manager 1.20);
+    # this is what issues the certs referenced by each add-on's ListenerSet.
+    # Requires the Gateway API v1.5+ standard-channel CRDs (applied by the
+    # workflow before the bootstrap job runs).
+    enableListenerSet: true
   featureGates:
     ListenerSets: true
 
-# cert-manager v1.20.2: prometheus.servicemonitor (lowercase).
+# cert-manager v1.21.3: prometheus.servicemonitor (lowercase).
 # PodMonitor and ServiceMonitor are mutually exclusive in this chart.
 prometheus:
   enabled: true

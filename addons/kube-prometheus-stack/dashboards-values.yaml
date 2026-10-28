@@ -124,21 +124,21 @@ grafana:
 
   dashboards:
     network:
-      # external-dns 0.21 (chart 1.21.1). Dashboard 23969 is the 0.18+ metrics set.
+      # external-dns 0.23 (chart 1.23.0). Dashboard 23969 is the 0.18+ metrics set.
       external-dns:
         gnetId: 23969
         revision: 1
         datasource: *dsVariable
 
     security:
-      # cert-manager v1.20
+      # cert-manager v1.21
       cert-manager:
         gnetId: 20850
         revision: 1
         datasource: *dsVariable
-      # Kyverno chart 3.8.1 (app v1.18.1)
+      # Kyverno chart 3.9.2 (app v1.19.2)
       kyverno:
-        url: https://raw.githubusercontent.com/kyverno/kyverno/v1.18.1/charts/kyverno/charts/grafana/dashboard/kyverno-dashboard.json
+        url: https://raw.githubusercontent.com/kyverno/kyverno/v1.19.2/charts/kyverno/charts/grafana/dashboard/kyverno-dashboard.json
         datasource: *dsKyverno
       # Trivy Operator docs point at grafana.com/dashboards/17813 revision 2.
       trivy-operator:
@@ -147,9 +147,9 @@ grafana:
         datasource: *dsPrometheus
 
     devops:
-      # Argo CD v3.4.3 (chart 9.5.21)
+      # Argo CD v3.5.6 (chart 10.11.6)
       argocd:
-        url: https://raw.githubusercontent.com/argoproj/argo-cd/v3.4.3/examples/dashboard.json
+        url: https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.6/examples/dashboard.json
         datasource: *dsVariable
       keda:
         gnetId: 23951
