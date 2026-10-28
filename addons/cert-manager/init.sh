@@ -19,7 +19,7 @@ export ACME_SERVER="${ACME_SERVER:-https://acme-v02.api.letsencrypt.org/director
 helm upgrade --install cert-manager cert-manager --repo https://charts.jetstack.io \
   --namespace cert-manager \
   --create-namespace \
-  --version v1.20.2 \
+  --version v1.21.3 \
   --values "$VALUES_FILE"
 
 # shellcheck disable=SC2016  # literal ${VAR} names are envsubst syntax, not shell
