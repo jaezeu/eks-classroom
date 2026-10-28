@@ -4,7 +4,7 @@ metadata:
   name: letsencrypt-prod
 spec:
   acme:
-    server: https://acme-v02.api.letsencrypt.org/directory
+    server: ${ACME_SERVER} # production or staging directory URL, substituted by init.sh
     email: ${EMAIL} # Replace with your email
     privateKeySecretRef:
       name: letsencrypt-prod

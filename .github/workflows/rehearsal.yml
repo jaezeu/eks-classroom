@@ -61,6 +61,7 @@ jobs:
       region: ap-southeast-1
       external-dns: true
       cert-manager: true
+      staging-certs: true   # rehearsal certs come from Let's Encrypt staging, off the production quota
       argocd: true
       monitoring: true
       metrics-server: true
@@ -96,6 +97,7 @@ jobs:
       nginx-ingress: true
       external-dns: true
       cert-manager: true
+      staging-certs: true   # rehearsal certs come from Let's Encrypt staging, off the production quota
       argocd: true
       monitoring: true
       metrics-server: true
