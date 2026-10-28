@@ -168,6 +168,10 @@ jobs:
 
       - name: Deploy Cluster
         id: deploy_steps
+        env:
+          # Terraform reads TF_VAR_* as variable values. The OpenTelemetry demo
+          # needs the larger node type; everything else keeps the default.
+          TF_VAR_node_instance_types: ${{ inputs.opentelemetry-demo && '["m6g.xlarge"]' || '["m6g.large"]' }}
         run: |
           echo "Creating cluster with no node group"
           terraform plan -var-file=vars/cilium-wo-nodegroup.tfvars -out=cilium-cluster-wo-nodegroups.out
@@ -202,12 +206,7 @@ jobs:
           popd
 
           echo "Creating cluster with node group"
-          # m6g.large is the default. The OpenTelemetry demo needs the larger type.
-          TF_NODE_ARGS=()
-          if [ "${{ inputs.opentelemetry-demo }}" = "true" ]; then
-            TF_NODE_ARGS=(-var 'node_instance_types=["m6g.xlarge"]')
-          fi
-          terraform plan -var-file=vars/cilium-with-nodegroup.tfvars "${TF_NODE_ARGS[@]}" -out cilium-cluster-with-nodegroups.out
+          terraform plan -var-file=vars/cilium-with-nodegroup.tfvars -out=cilium-cluster-with-nodegroups.out
           terraform apply -auto-approve cilium-cluster-with-nodegroups.out
 
           {
