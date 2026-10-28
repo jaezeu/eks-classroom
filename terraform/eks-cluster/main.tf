@@ -18,7 +18,7 @@ locals {
 
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "~> 21.20.0"
+  version = "~> 21.29.0"
 
   name               = "${local.name_prefix}-eks-cluster"
   kubernetes_version = "1.36"
@@ -62,7 +62,7 @@ module "eks" {
 
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
-  version = "~> 6.6.0"
+  version = "~> 6.7.0"
 
   name                    = "${local.name_prefix}-eks-vpc"
   cidr                    = "172.31.0.0/16"

@@ -1,6 +1,6 @@
 module "github-oidc" {
   source  = "terraform-module/github-oidc-provider/aws"
-  version = "~> 2.2.1"
+  version = "~> 2.3.0"
 
   create_oidc_provider = false
   oidc_provider_arn    = data.aws_iam_openid_connect_provider.github.arn

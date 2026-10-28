@@ -8,7 +8,7 @@
 ###############################
 module "external_dns_role" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts"
-  version = "~> 6.6.1"
+  version = "~> 6.8.0"
 
   count = var.enable_external_dns ? 1 : 0
 
@@ -32,7 +32,7 @@ module "external_dns_role" {
 
 module "ebs_csi_driver_role" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts"
-  version = "~> 6.6.1"
+  version = "~> 6.8.0"
 
   count = var.enable_ebs_csi_driver_role ? 1 : 0
 
@@ -120,7 +120,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "loki_ruler" {
 
 module "loki_s3_role" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts"
-  version = "~> 6.6.1"
+  version = "~> 6.8.0"
 
   count = var.enable_loki_s3 ? 1 : 0
 
