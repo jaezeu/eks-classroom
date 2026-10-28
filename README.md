@@ -72,7 +72,6 @@ This repository supports two EKS networking architectures. Use this to decide:
 | Service routing | kube-proxy (iptables) | eBPF datapath |
 | Observability | Add-ons only | + Hubble (flow visibility) |
 | Runtime security | Add-ons only | + Tetragon |
-| mTLS / identity | - | + SPIRE (mutual auth) |
 | Ingress | NGINX Ingress | Gateway API (shared `Gateway` + per-app `ListenerSet`) |
 | Bootstrap | Single `terraform apply` | Split apply (CNI before nodes) |
 | Choose it for | General-purpose workloads, learning | High-performance networking, security & observability deep-dives |
@@ -85,8 +84,7 @@ cluster's node groups only become healthy once Cilium itself is installed
 (hence the split apply).
 
 The Cilium deployment bundles a full eBPF stack: Hubble for flow visibility,
-Tetragon for runtime security, SPIRE for mutual (mTLS) authentication, and the
-Gateway API for ingress.
+Tetragon for runtime security, and the Gateway API for ingress.
 
 ![Cilium stack deep dive](docs/images/cilium-architecture.png)
 

@@ -29,8 +29,8 @@ directory is self-contained: a `values.yaml` (Helm configuration) and an
 > **Cilium** is a special case: its `values.yaml`/`init.sh` live here, but it is
 > installed by the [Cilium cluster workflow](../.github/workflows/create-cilium-cluster.yml)
 > **before node groups join** (between the two Terraform applies), not by the
-> bootstrap job. See [cilium/](cilium/) for the Gateway API and SPIRE
-> resources, and the [Cilium architecture diagram](../docs/images/cilium-architecture.png).
+> bootstrap job. See [cilium/](cilium/) for the Gateway API resources, and
+> the [Cilium architecture diagram](../docs/images/cilium-architecture.png).
 
 ## Standard vs Gateway API variants
 
