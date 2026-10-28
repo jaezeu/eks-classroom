@@ -1,6 +1,16 @@
 # kyverno 3.8.1: each controller has its own serviceMonitor.enabled.
 # metricsService is created by default, so the monitors have a port to scrape.
 admissionController:
+  # Chart default is a 384Mi limit. Admission of large objects (kube-prometheus-stack
+  # CRDs and dashboard ConfigMaps) by a whole class at once pushed the
+  # controller into timeouts and restarts; give it headroom.
+  container:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 1Gi
   serviceMonitor:
     enabled: true
   # Empty ingressFrom keeps the chart allow-all ingress rule, so the API server

@@ -5,13 +5,32 @@ metadata:
 spec:
   validationFailureAction: Enforce
   background: false
+  # Explicit kinds, not "*": a wildcard registers the webhook for every
+  # resource in the cluster, including large cluster-scoped objects such as
+  # the kube-prometheus-stack CRDs, and the admission controller then times
+  # out ("context deadline exceeded") under a class-sized burst of installs.
+  # 30s (the maximum) buffers the remaining calls.
+  webhookTimeoutSeconds: 30
   rules:
     - name: no-default-namespace
       match:
         any:
           - resources:
               kinds:
-                - "*"
+                - Pod
+                - Deployment
+                - StatefulSet
+                - DaemonSet
+                - Job
+                - CronJob
+                - Service
+                - ConfigMap
+                - Secret
+                - Ingress
+                - PersistentVolumeClaim
+                - ServiceAccount
+                - HorizontalPodAutoscaler
+                - NetworkPolicy
               namespaces:
                 - default
                 - kube-prometheus-stack
