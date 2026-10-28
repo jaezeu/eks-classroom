@@ -3,3 +3,25 @@
 # namespace; kube-prometheus-stack selects it from any namespace.
 serviceMonitor:
   enabled: true
+
+# Platform namespaces are managed by the workflows, not by students; scanning
+# them only produces findings nobody here can act on.
+excludeNamespaces: "kube-system,monitoring,loki,cert-manager,external-dns,argocd,kyverno,trivy-system,gateway"
+
+operator:
+  # Default 10. Each scan Job may use up to trivy.resources.limits.memory, so
+  # ten at once on m6g.large nodes already running Prometheus and Loki caused
+  # kubelet evictions. Two keeps the sweep moving without memory pressure.
+  scanJobsConcurrentLimit: 2
+  # Default is empty, which leaves failed/evicted Jobs and their pods behind.
+  scanJobTTL: 10m
+  # Scanners students do not use. Each is a separate Job per workload (or per
+  # node for infra assessment), so switching them off removes most of the load.
+  sbomGenerationEnabled: false
+  infraAssessmentScannerEnabled: false
+  clusterComplianceEnabled: false
+
+trivy:
+  # Report only what a student can fix.
+  ignoreUnfixed: true
+  severity: HIGH,CRITICAL
