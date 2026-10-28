@@ -15,7 +15,7 @@ esac
 # Loki and Promtail JSON is injected with --set-file, not --values. Those files
 # contain Grafana variables ($namespace, $job, $__range). A --values file is
 # envsubst'd by scripts/validate-addons.sh, which would erase them.
-helm upgrade --install kube-prometheus-stack kube-prometheus-stack --repo https://prometheus-community.github.io/helm-charts --version 86.3.2 \
+helm upgrade --install kube-prometheus-stack kube-prometheus-stack --repo https://prometheus-community.github.io/helm-charts --version 92.14.1 \
   --create-namespace \
   --namespace monitoring \
   --values "$VALUES_FILE" \
