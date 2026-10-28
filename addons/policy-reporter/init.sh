@@ -9,9 +9,6 @@
 
 VALUES_FILE="${1:-values.yaml}"
 
-# ServiceMonitor CRDs. The chart emits one when monitoring is enabled.
-"$(cd "$(dirname "$0")" && pwd)/../kube-prometheus-stack/install-crds.sh"
-
 # renovate: datasource=helm depName=policy-reporter registryUrl=https://kyverno.github.io/policy-reporter
 helm upgrade --install policy-reporter policy-reporter \
   --repo https://kyverno.github.io/policy-reporter \

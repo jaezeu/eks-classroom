@@ -58,9 +58,14 @@ helm() {
     prev="$a"
   done
   echo "  helm ${args[*]}" >&2
+  # --api-versions: the workflows run install-crds.sh before the first add-on,
+  # so on a real cluster the ServiceMonitor API exists by the time the chart renders (and
+  # charts such as cilium refuse to render ServiceMonitors without it).
   # subshell + pipefail: a failed render must fail the check even though
   # kubeconform would exit 0 on the resulting empty input
-  (set -o pipefail; command helm "${args[@]}" --kube-version "$KUBE_VERSION" | kubeconform_cmd -)
+  (set -o pipefail; command helm "${args[@]}" --kube-version "$KUBE_VERSION" \
+    --api-versions monitoring.coreos.com/v1 --api-versions monitoring.coreos.com/v1/ServiceMonitor \
+    | kubeconform_cmd -)
 }
 export -f helm kubeconform_cmd
 

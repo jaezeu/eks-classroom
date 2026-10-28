@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Prometheus Operator CRDs shipped with kube-prometheus-stack, including
-# ServiceMonitor. Other charts create ServiceMonitors, and several of them
-# install before the monitoring stack (or with monitoring left off). Applying
-# the CRDs here lets those releases succeed either way.
+# ServiceMonitor. Other add-on charts create ServiceMonitors, and several of
+# them install before the monitoring stack (or with monitoring left off).
+# Both cluster workflows run this once, before the first add-on, so those
+# releases render either way. Add-on init.sh scripts do not call it.
 #
 # No-op when the ServiceMonitor CRD is already present. Server-side apply is
 # required: these CRDs are larger than kubectl's last-applied annotation limit.

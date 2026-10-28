@@ -4,9 +4,6 @@
 # passes the Gateway API variant:  ./init.sh gateway-values.yaml
 VALUES_FILE="${1:-values.yaml}"
 
-# ServiceMonitor CRDs. The chart only emits ServiceMonitors when the API is installed.
-"$(cd "$(dirname "$0")" && pwd)/../kube-prometheus-stack/install-crds.sh"
-
 # renovate: datasource=helm depName=argo-cd registryUrl=https://argoproj.github.io/argo-helm
 helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-helm --version 9.5.21 \
   --namespace argocd --create-namespace \

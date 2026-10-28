@@ -140,9 +140,11 @@ Use the workflows in `.github/workflows` to create and destroy clusters:
 - `create-deployer-role.yml` - creates the IAM role the other workflows assume (run first; the account's shared GitHub OIDC provider must already exist, this looks it up rather than creating it)
 - `create-standard-cluster.yml` - standard cluster: VPC CNI + add-ons
 - `create-cilium-cluster.yml` - Cilium cluster: Cilium CNI + add-ons
-
-**Deploy everything?** is the first option on both create workflows. It installs every platform add-on for that cluster. Leave it off to pick add-ons one by one. **Security** installs Kyverno, Policy Reporter, and Trivy Operator together. Metrics Server and KEDA install with Prometheus. The OpenTelemetry demo is a Cilium-only option and is not included; selecting it creates `m6g.xlarge` nodes.
 - `cleanup.yml` - tears down everything the cluster workflows created
+
+Each add-on is its own toggle on the create workflows; pick them one by one.
+The OpenTelemetry demo is a Cilium-only option; selecting it creates
+`m6g.xlarge` nodes.
 
 Every cluster workflow ends with a **verify job** (workload rollouts, policies,
 TLS certs, live HTTPS checks). Cleanup **sweeps orphans** that terraform can't

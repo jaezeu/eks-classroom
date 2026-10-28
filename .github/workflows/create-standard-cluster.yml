@@ -12,11 +12,6 @@ on:
         description: "AWS region"
         required: true
         default: ap-southeast-1
-      deploy-everything:
-        type: boolean
-        description: "Deploy everything?"
-        default: false
-        required: true
       nginx-ingress:
         type: boolean
         description: "Deploy Nginx Ingress Controller?"
@@ -39,7 +34,17 @@ on:
         required: true
       monitoring:
         type: boolean
-        description: "Deploy Prometheus, Grafana, Metrics Server, and KEDA?"
+        description: "Deploy Prometheus and Grafana?"
+        default: false
+        required: true
+      metrics-server:
+        type: boolean
+        description: "Deploy Metrics Server?"
+        default: false
+        required: true
+      keda:
+        type: boolean
+        description: "Deploy KEDA?"
         default: false
         required: true
       logging:
@@ -52,9 +57,19 @@ on:
         description: "Deploy EBS CSI Resources?"
         default: false
         required: true
-      security:
+      trivy-operator:
         type: boolean
-        description: "Deploy security? Kyverno, guardrail policies, Policy Reporter, and Trivy Operator."
+        description: "Deploy Trivy Operator?"
+        default: false
+        required: true
+      kyverno:
+        type: boolean
+        description: "Deploy Kyverno & guardrail policies?"
+        default: false
+        required: true
+      policy-reporter:
+        type: boolean
+        description: "Deploy Kyverno Policy Reporter? (needs Kyverno)"
         default: false
         required: true
   # Mirrors the dispatch inputs so the rehearsal workflow can call this
@@ -62,9 +77,6 @@ on:
   # the jobs below use the typed inputs.* context everywhere.
   workflow_call:
     inputs:
-      deploy-everything:
-        type: boolean
-        default: false
       region:
         type: string
         default: ap-southeast-1
@@ -83,13 +95,25 @@ on:
       monitoring:
         type: boolean
         default: false
+      metrics-server:
+        type: boolean
+        default: false
+      keda:
+        type: boolean
+        default: false
       logging:
         type: boolean
         default: false
       ebs-csi:
         type: boolean
         default: false
-      security:
+      trivy-operator:
+        type: boolean
+        default: false
+      kyverno:
+        type: boolean
+        default: false
+      policy-reporter:
         type: boolean
         default: false
 
@@ -181,13 +205,18 @@ jobs:
       - name: Update kubeconfig
         run: aws eks update-kubeconfig --name ${{ needs.deploy.outputs.cluster_name }}
 
+      # Every add-on chart below ships a ServiceMonitor, and most install before
+      # (or without) kube-prometheus-stack. Apply its CRDs once, up front.
+      - name: Install Prometheus Operator CRDs
+        run: ./addons/kube-prometheus-stack/install-crds.sh
+
       - name: Deploy Nginx Ingress Controller
-        if: ${{ inputs.deploy-everything || inputs.nginx-ingress }}
+        if: ${{ inputs.nginx-ingress }}
         working-directory: addons/nginx-ingress
         run: ./init.sh
 
       - name: Deploy ExternalDNS for Route53
-        if: ${{ inputs.deploy-everything || inputs.external-dns }}
+        if: ${{ inputs.external-dns }}
         working-directory: addons/r53-externaldns
         env:
           REGION: ${{ inputs.region }}
@@ -199,7 +228,7 @@ jobs:
           ./init.sh
 
       - name: Deploy Cert Manager
-        if: ${{ inputs.deploy-everything || inputs.cert-manager }}
+        if: ${{ inputs.cert-manager }}
         working-directory: addons/cert-manager
         env:
           EMAIL: ${{ secrets.EMAIL_ADDRESS }}
@@ -208,17 +237,17 @@ jobs:
           envsubst < cluster-issuer.yaml | kubectl apply -f -
 
       - name: Deploy ArgoCD
-        if: ${{ inputs.deploy-everything || inputs.argocd }}
+        if: ${{ inputs.argocd }}
         working-directory: addons/argocd
         run: ./init.sh
 
       - name: Deploy Prometheus and Grafana
-        if: ${{ inputs.deploy-everything || inputs.monitoring }}
+        if: ${{ inputs.monitoring }}
         working-directory: addons/kube-prometheus-stack
         run: ./init.sh
 
       - name: Deploy Loki
-        if: ${{ inputs.deploy-everything || inputs.logging }}
+        if: ${{ inputs.logging }}
         working-directory: addons/loki
         env:
           REGION: ${{ inputs.region }}
@@ -232,7 +261,7 @@ jobs:
           ./init.sh
 
       - name: Deploy EBS CSI Driver Resources
-        if: ${{ inputs.deploy-everything || inputs.ebs-csi }}
+        if: ${{ inputs.ebs-csi }}
         working-directory: addons/ebs-csi-driver
         env:
           EBS_CSI_ROLE_ARN: ${{ needs.deploy.outputs.ebs_csi_role_arn }}
@@ -242,17 +271,15 @@ jobs:
           mv updated-values.yaml values.yaml
           ./init.sh
 
-      # Installed with Prometheus. kube-system already exists, so the
-      # namespace-name policy does not apply.
+      # kube-system already exists, so the namespace-name policy does not apply.
       - name: Deploy Metrics Server
-        if: ${{ inputs.deploy-everything || inputs.monitoring }}
+        if: ${{ inputs.metrics-server }}
         working-directory: addons/metrics-server
         run: ./init.sh
 
-      # Installed with Prometheus into the existing monitoring namespace,
-      # after the stack, because the chart ships ServiceMonitors.
+      # Installs into monitoring (shared with Prometheus when that is on).
       - name: Deploy KEDA
-        if: ${{ inputs.deploy-everything || inputs.monitoring }}
+        if: ${{ inputs.keda }}
         working-directory: addons/keda
         run: ./init.sh
 
@@ -260,17 +287,17 @@ jobs:
       # Kyverno is last among namespace-creating installs. Policy Reporter follows
       # it, in the existing kyverno namespace.
       - name: Deploy Trivy Operator
-        if: ${{ inputs.deploy-everything || inputs.security }}
+        if: ${{ inputs.trivy-operator }}
         working-directory: addons/trivy-operator
         run: ./init.sh
 
       - name: Deploy Kyverno & Guardrail Policies
-        if: ${{ inputs.deploy-everything || inputs.security }}
+        if: ${{ inputs.kyverno }}
         working-directory: addons/kyverno
         run: ./init.sh
 
       - name: Deploy Kyverno Policy Reporter
-        if: ${{ inputs.deploy-everything || inputs.security }}
+        if: ${{ inputs.policy-reporter }}
         working-directory: addons/policy-reporter
         run: ./init.sh
 
@@ -280,13 +307,16 @@ jobs:
     needs: [deploy, bootstrap]
     timeout-minutes: 30
     env:
-      NGINX_INGRESS: ${{ inputs.deploy-everything || inputs.nginx-ingress }}
-      EXTERNAL_DNS: ${{ inputs.deploy-everything || inputs.external-dns }}
-      CERT_MANAGER: ${{ inputs.deploy-everything || inputs.cert-manager }}
-      ARGOCD: ${{ inputs.deploy-everything || inputs.argocd }}
-      MONITORING: ${{ inputs.deploy-everything || inputs.monitoring }}
-      LOGGING: ${{ inputs.deploy-everything || inputs.logging }}
-      SECURITY: ${{ inputs.deploy-everything || inputs.security }}
+      NGINX_INGRESS: ${{ inputs.nginx-ingress }}
+      EXTERNAL_DNS: ${{ inputs.external-dns }}
+      CERT_MANAGER: ${{ inputs.cert-manager }}
+      ARGOCD: ${{ inputs.argocd }}
+      MONITORING: ${{ inputs.monitoring }}
+      KEDA: ${{ inputs.keda }}
+      LOGGING: ${{ inputs.logging }}
+      TRIVY_OPERATOR: ${{ inputs.trivy-operator }}
+      KYVERNO: ${{ inputs.kyverno }}
+      POLICY_REPORTER: ${{ inputs.policy-reporter }}
 
     steps:
       - name: Configure AWS Credentials via OIDC
@@ -305,9 +335,10 @@ jobs:
           [ "$EXTERNAL_DNS" = "true" ]  && NAMESPACES="$NAMESPACES external-dns"
           [ "$CERT_MANAGER" = "true" ]  && NAMESPACES="$NAMESPACES cert-manager"
           [ "$ARGOCD" = "true" ]        && NAMESPACES="$NAMESPACES argocd"
-          [ "$MONITORING" = "true" ]    && NAMESPACES="$NAMESPACES monitoring"
+          { [ "$MONITORING" = "true" ] || [ "$KEDA" = "true" ]; } && NAMESPACES="$NAMESPACES monitoring"
           [ "$LOGGING" = "true" ]       && NAMESPACES="$NAMESPACES loki"
-          [ "$SECURITY" = "true" ]      && NAMESPACES="$NAMESPACES kyverno trivy-system"
+          [ "$TRIVY_OPERATOR" = "true" ] && NAMESPACES="$NAMESPACES trivy-system"
+          { [ "$KYVERNO" = "true" ] || [ "$POLICY_REPORTER" = "true" ]; } && NAMESPACES="$NAMESPACES kyverno"
           for ns in $NAMESPACES; do
             echo "--- $ns"
             RESOURCES=$(kubectl get deploy,statefulset,daemonset -n "$ns" -o name)
@@ -318,33 +349,33 @@ jobs:
           done
 
       - name: Kyverno guardrail policies ready
-        if: ${{ inputs.deploy-everything || inputs.security }}
+        if: ${{ inputs.kyverno }}
         run: kubectl wait --for=condition=Ready clusterpolicy --all --timeout=3m
 
       - name: Ingress load balancer provisioned
-        if: ${{ inputs.deploy-everything || inputs.nginx-ingress }}
+        if: ${{ inputs.nginx-ingress }}
         run: |
           kubectl wait -n ingress-nginx svc/ingress-nginx-controller \
             --for=jsonpath='{.status.loadBalancer.ingress[0].hostname}' --timeout=5m
 
       - name: Platform certificates issued
-        if: ${{ (inputs.deploy-everything || inputs.nginx-ingress) && (inputs.deploy-everything || inputs.cert-manager) && (inputs.deploy-everything || inputs.external-dns) && (inputs.deploy-everything || inputs.argocd || inputs.monitoring || inputs.security) }}
+        if: ${{ inputs.nginx-ingress && inputs.cert-manager && inputs.external-dns && (inputs.argocd || inputs.monitoring || inputs.policy-reporter) }}
         run: |
           NAMESPACES=""
-          [ "$ARGOCD" = "true" ]     && NAMESPACES="$NAMESPACES argocd"
-          [ "$MONITORING" = "true" ] && NAMESPACES="$NAMESPACES monitoring"
-          [ "$SECURITY" = "true" ]   && NAMESPACES="$NAMESPACES kyverno"
+          [ "$ARGOCD" = "true" ]          && NAMESPACES="$NAMESPACES argocd"
+          [ "$MONITORING" = "true" ]      && NAMESPACES="$NAMESPACES monitoring"
+          [ "$POLICY_REPORTER" = "true" ] && NAMESPACES="$NAMESPACES kyverno"
           for ns in $NAMESPACES; do
             kubectl wait --for=condition=Ready certificate --all -n "$ns" --timeout=10m
           done
 
       - name: Platform UIs reachable over HTTPS
-        if: ${{ (inputs.deploy-everything || inputs.nginx-ingress) && (inputs.deploy-everything || inputs.cert-manager) && (inputs.deploy-everything || inputs.external-dns) && (inputs.deploy-everything || inputs.argocd || inputs.monitoring || inputs.security) }}
+        if: ${{ inputs.nginx-ingress && inputs.cert-manager && inputs.external-dns && (inputs.argocd || inputs.monitoring || inputs.policy-reporter) }}
         run: |
           URLS=""
-          [ "$ARGOCD" = "true" ]     && URLS="$URLS https://admin-argocd.sctp-sandbox.com"
-          [ "$MONITORING" = "true" ] && URLS="$URLS https://admin-prom.sctp-sandbox.com https://admin-grafana.sctp-sandbox.com"
-          [ "$SECURITY" = "true" ]   && URLS="$URLS https://admin-policy-reporter.sctp-sandbox.com"
+          [ "$ARGOCD" = "true" ]          && URLS="$URLS https://admin-argocd.sctp-sandbox.com"
+          [ "$MONITORING" = "true" ]      && URLS="$URLS https://admin-prom.sctp-sandbox.com https://admin-grafana.sctp-sandbox.com"
+          [ "$POLICY_REPORTER" = "true" ] && URLS="$URLS https://admin-policy-reporter.sctp-sandbox.com"
           for url in $URLS; do
             curl -sSfL -o /dev/null --connect-timeout 15 --retry 10 --retry-delay 15 --retry-all-errors "$url"
             echo "OK  $url"

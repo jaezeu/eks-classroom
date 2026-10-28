@@ -16,12 +16,12 @@ directory is self-contained: a `values.yaml` (Helm configuration) and an
 | [r53-externaldns](r53-externaldns/) | `external-dns` | external-dns/external-dns | 1.21.1 | Route 53 DNS automation |
 | [kube-prometheus-stack](kube-prometheus-stack/) | `monitoring` | prometheus-community/kube-prometheus-stack | 86.2.2 | Prometheus, Grafana, Alertmanager |
 | [loki](loki/) | `loki` | grafana/loki (+ promtail) | 6.29.0 | Log aggregation (S3 backend) |
-| [opentelemetry-demo](opentelemetry-demo/) | `otel-demo` | open-telemetry/opentelemetry-demo | 0.42.6 | Astronomy shop on the Cilium workflow. Uses this Prometheus, Grafana, Loki, and Jaeger. Selects m6g.xlarge. Not part of Deploy everything. |
+| [opentelemetry-demo](opentelemetry-demo/) | `otel-demo` | open-telemetry/opentelemetry-demo | 0.42.6 | Astronomy shop on the Cilium workflow. Uses this Prometheus, Grafana, Loki, and Jaeger. Selects m6g.xlarge. |
 | [ebs-csi-driver](ebs-csi-driver/) | `kube-system` | aws-ebs-csi-driver | 2.61.1 | EBS volumes; default StorageClass `gp3` |
 | [metrics-server](metrics-server/) | `kube-system` | metrics-server/metrics-server | 3.14.0 | `kubectl top` and HorizontalPodAutoscaler metrics |
-| [keda](keda/) | `monitoring` | kedacore/keda | 2.21.0 | Event-driven autoscaling, installed with Prometheus |
+| [keda](keda/) | `monitoring` | kedacore/keda | 2.21.0 | Event-driven autoscaling |
 | [kyverno](kyverno/) | `kyverno` | kyverno/kyverno | 3.8.1 | Admission controller + [guardrail policies](../kyverno-policies/) |
-| [policy-reporter](policy-reporter/) | `kyverno` | policy-reporter/policy-reporter | 3.11.1 | Kyverno PolicyReport UI (installed with Kyverno) |
+| [policy-reporter](policy-reporter/) | `kyverno` | policy-reporter/policy-reporter | 3.11.1 | Kyverno PolicyReport UI (needs Kyverno) |
 | [trivy-operator](trivy-operator/) | `trivy-system` | aqua/trivy-operator | 0.37.0 | Workload vulnerability and config-audit reports |
 | [cilium](cilium/) | `kube-system` | cilium/cilium | 1.20.0-pre.4 | eBPF CNI, Hubble, Gateway API + ListenerSet (Cilium clusters) |
 | [cilium/tetragon](cilium/tetragon/) | `kube-system` | cilium/tetragon | v1.5.0 | eBPF runtime security (Cilium clusters) |
@@ -70,17 +70,20 @@ Order matters, since several add-ons consume resources created by others:
 5. **loki**: needs its IRSA role and the two S3 buckets created by Terraform (`enable_loki_s3`).
 6. **tetragon**: Cilium clusters only; ships ServiceMonitors scraped by Prometheus (install after monitoring).
 7. **ebs-csi-driver**: needs its IRSA role. It also installs the default `gp3` StorageClass, so anything that asks for a volume can bind one.
-8. **metrics-server**: installed with Prometheus. `kube-system` already exists, so the namespace-name policy does not apply. Gives `kubectl top` and the HorizontalPodAutoscaler API. **KEDA** is installed with Prometheus into the existing `monitoring` namespace, after the stack, because it ships ServiceMonitors.
-9. **security** (Trivy Operator, then Kyverno, then Policy Reporter): Trivy is first because the namespace-name policy would reject `trivy-system`. Kyverno is last among namespace-creating installs. Its [policies](../kyverno-policies/) enforce namespace naming and block deletions in protected namespaces. Policy Reporter is installed into the existing `kyverno` namespace (a new namespace would be rejected) and needs the PolicyReport CRDs.
-10. **opentelemetry-demo**: Cilium workflow only, after Prometheus and Loki, and before Kyverno. The namespace-name policy would reject `otel-demo`. Selecting it creates the node group as `m6g.xlarge`. Not included in Deploy everything.
+8. **metrics-server**: `kube-system` already exists, so the namespace-name policy does not apply. Gives `kubectl top` and the HorizontalPodAutoscaler API. **KEDA** installs into the `monitoring` namespace (shared with Prometheus when that is selected).
+9. **trivy-operator**, then **kyverno**, then **policy-reporter**: Trivy is first because the namespace-name policy would reject `trivy-system`. Kyverno is last among namespace-creating installs. Its [policies](../kyverno-policies/) enforce namespace naming and block deletions in protected namespaces. Policy Reporter is installed into the existing `kyverno` namespace (a new namespace would be rejected) and needs the PolicyReport CRDs, so select it together with Kyverno.
+10. **opentelemetry-demo**: Cilium workflow only, after Prometheus and Loki, and before Kyverno. The namespace-name policy would reject `otel-demo`. Selecting it creates the node group as `m6g.xlarge`.
 
 Add-on charts that expose metrics ship a ServiceMonitor (`ingress-nginx`,
 `external-dns`, `cert-manager`, `argo-cd`, Cilium/Hubble, EBS CSI, Loki,
 Promtail, Kyverno, Metrics Server, KEDA, Policy Reporter, Tetragon, Trivy Operator).
-Each of those `init.sh` scripts applies the
-Prometheus Operator CRDs from kube-prometheus-stack `86.2.2` when they are
-not already installed, so the monitors can be created before the monitoring
-stack itself. The stack selects every ServiceMonitor
+Both cluster workflows run
+[`kube-prometheus-stack/install-crds.sh`](kube-prometheus-stack/install-crds.sh)
+once before the first add-on. It applies the Prometheus Operator CRDs from
+kube-prometheus-stack `86.2.2` when they are not already installed, so the
+monitors can be created before the monitoring stack itself. Running an
+`init.sh` by hand on a cluster without those CRDs needs that script first.
+The stack selects every ServiceMonitor
 (`serviceMonitorSelectorNilUsesHelmValues: false`).
 
 Grafana files the add-ons that cluster installs into folders when its pod
@@ -373,7 +376,7 @@ which is the webhook client.
 
 ### Policy Reporter
 
-Installed with Kyverno, into the `kyverno` namespace. The chart's default
+Installed after Kyverno, into the `kyverno` namespace. The chart's default
 egress opens only TCP 6443. Both values files replace that with TCP 443 (the
 EKS API) and DNS on 53, for the core process and the Kyverno plugin. Ingress
 on 8080 has no source selector, so probes, Prometheus, the UI, nginx, and

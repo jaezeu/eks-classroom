@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 
-# ServiceMonitor CRDs. The collector chart emits one when serviceMonitor is on.
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-"$ROOT/../kube-prometheus-stack/install-crds.sh"
 
 # renovate: datasource=helm depName=opentelemetry-demo registryUrl=https://open-telemetry.github.io/opentelemetry-helm-charts
 helm upgrade --install opentelemetry-demo opentelemetry-demo \
