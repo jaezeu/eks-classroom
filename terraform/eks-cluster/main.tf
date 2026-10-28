@@ -21,7 +21,7 @@ module "eks" {
   version = "~> 21.29.0"
 
   name               = "${local.name_prefix}-eks-cluster"
-  kubernetes_version = "1.36"
+  kubernetes_version = "1.37"
 
   addons = local.cluster_addons
 
