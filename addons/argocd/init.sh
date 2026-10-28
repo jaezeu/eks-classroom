@@ -5,6 +5,6 @@
 VALUES_FILE="${1:-values.yaml}"
 
 # renovate: datasource=helm depName=argo-cd registryUrl=https://argoproj.github.io/argo-helm
-helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-helm --version 9.5.21 \
+helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-helm --version 9.7.1 \
   --namespace argocd --create-namespace \
   --values "$VALUES_FILE"
