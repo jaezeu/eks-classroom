@@ -10,9 +10,9 @@ rebuilt from nothing every month to prove it.*
 [![Monthly Platform Rehearsal](https://github.com/jaezeu/eks-classroom/actions/workflows/rehearsal.yml/badge.svg)](https://github.com/jaezeu/eks-classroom/actions/workflows/rehearsal.yml)
 
 ![Terraform](https://img.shields.io/badge/Terraform-%3E%3D1.15-7B42BC?logo=terraform&logoColor=white)
-![Kubernetes](https://img.shields.io/badge/EKS-v1.36-326CE5?logo=kubernetes&logoColor=white)
-![Cilium](https://img.shields.io/badge/Cilium-1.20--pre-F8C517?logo=cilium&logoColor=black)
-![Gateway API](https://img.shields.io/badge/Gateway%20API-v1.5%20%2B%20ListenerSet-326CE5?logo=kubernetes&logoColor=white)
+![Kubernetes](https://img.shields.io/badge/EKS-v1.37-326CE5?logo=kubernetes&logoColor=white)
+![Cilium](https://img.shields.io/badge/Cilium-1.20.4-F8C517?logo=cilium&logoColor=black)
+![Gateway API](https://img.shields.io/badge/Gateway%20API-v1.6.3%20%2B%20ListenerSet-326CE5?logo=kubernetes&logoColor=white)
 ![Helm](https://img.shields.io/badge/Helm-v3-0F1689?logo=helm&logoColor=white)
 ![Renovate](https://img.shields.io/badge/Renovate-enabled-1A1F6C?logo=renovate&logoColor=white)
 ![License](https://img.shields.io/github/license/jaezeu/eks-classroom?color=blue)
