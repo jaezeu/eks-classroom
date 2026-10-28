@@ -121,7 +121,7 @@ example walks through the same pattern side by side with its classic
 |-----------|------------|
 | [terraform/eks-cluster/](terraform/eks-cluster/) | The cluster itself: VPC, EKS, node groups, IRSA roles. `.tfvars` files select standard vs Cilium mode. |
 | [terraform/eks-cluster-deployer-role/](terraform/eks-cluster-deployer-role/) | Bootstrap step: the IAM role (GitHub OIDC) that the workflows assume. Run once, first. |
-| [addons/](addons/) | One directory per Helm add-on (argocd, cert-manager, cilium, ebs-csi-driver, keda, kube-prometheus-stack, kyverno, loki, metrics-server, nginx-ingress, opentelemetry-demo, policy-reporter, r53-externaldns, trivy-operator). Each has its values file(s) and an `init.sh`. |
+| [addons/](addons/) | One directory per Helm add-on (argocd, cert-manager, cilium, ebs-csi-driver, keda, kube-prometheus-stack, kyverno (with Policy Reporter), loki, metrics-server, nginx-ingress, opentelemetry-demo, r53-externaldns, trivy-operator). Each has its values file(s) and an `init.sh`. |
 | [kyverno-policies/](kyverno-policies/) | The guardrail admission policies that `addons/kyverno` enforces. `gateway-api/` subfolder applies only on Cilium clusters. |
 | [deployment-manifests-examples/](deployment-manifests-examples/) | Plain-manifest teaching examples. `ingress-coaching/` targets the standard cluster, `gateway-api-coaching/` the Cilium one. |
 | [scripts/](scripts/) | Learner namespace provisioning and the add-on render/validation check CI uses. |

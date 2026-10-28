@@ -67,11 +67,6 @@ on:
         description: "Deploy Kyverno & guardrail policies?"
         default: false
         required: true
-      policy-reporter:
-        type: boolean
-        description: "Deploy Kyverno Policy Reporter? (needs Kyverno)"
-        default: false
-        required: true
   # Mirrors the dispatch inputs so the rehearsal workflow can call this
   # workflow. github.event.inputs is empty under workflow_call, which is why
   # the jobs below use the typed inputs.* context everywhere.
@@ -111,9 +106,6 @@ on:
         type: boolean
         default: false
       kyverno:
-        type: boolean
-        default: false
-      policy-reporter:
         type: boolean
         default: false
 
@@ -284,21 +276,16 @@ jobs:
         run: ./init.sh
 
       # Trivy before Kyverno: the namespace-name policy would reject trivy-system.
-      # Kyverno is last among namespace-creating installs. Policy Reporter follows
-      # it, in the existing kyverno namespace.
       - name: Deploy Trivy Operator
         if: ${{ inputs.trivy-operator }}
         working-directory: addons/trivy-operator
         run: ./init.sh
 
-      - name: Deploy Kyverno & Guardrail Policies
+      # Kyverno is last among namespace-creating installs. Its init.sh also
+      # installs Policy Reporter into the kyverno namespace.
+      - name: Deploy Kyverno, Guardrail Policies & Policy Reporter
         if: ${{ inputs.kyverno }}
         working-directory: addons/kyverno
-        run: ./init.sh
-
-      - name: Deploy Kyverno Policy Reporter
-        if: ${{ inputs.policy-reporter }}
-        working-directory: addons/policy-reporter
         run: ./init.sh
 
   verify:
@@ -316,7 +303,6 @@ jobs:
       LOGGING: ${{ inputs.logging }}
       TRIVY_OPERATOR: ${{ inputs.trivy-operator }}
       KYVERNO: ${{ inputs.kyverno }}
-      POLICY_REPORTER: ${{ inputs.policy-reporter }}
 
     steps:
       - name: Configure AWS Credentials via OIDC
@@ -338,7 +324,7 @@ jobs:
           { [ "$MONITORING" = "true" ] || [ "$KEDA" = "true" ]; } && NAMESPACES="$NAMESPACES monitoring"
           [ "$LOGGING" = "true" ]       && NAMESPACES="$NAMESPACES loki"
           [ "$TRIVY_OPERATOR" = "true" ] && NAMESPACES="$NAMESPACES trivy-system"
-          { [ "$KYVERNO" = "true" ] || [ "$POLICY_REPORTER" = "true" ]; } && NAMESPACES="$NAMESPACES kyverno"
+          [ "$KYVERNO" = "true" ]       && NAMESPACES="$NAMESPACES kyverno"
           for ns in $NAMESPACES; do
             echo "--- $ns"
             RESOURCES=$(kubectl get deploy,statefulset,daemonset -n "$ns" -o name)
@@ -359,23 +345,23 @@ jobs:
             --for=jsonpath='{.status.loadBalancer.ingress[0].hostname}' --timeout=5m
 
       - name: Platform certificates issued
-        if: ${{ inputs.nginx-ingress && inputs.cert-manager && inputs.external-dns && (inputs.argocd || inputs.monitoring || inputs.policy-reporter) }}
+        if: ${{ inputs.nginx-ingress && inputs.cert-manager && inputs.external-dns && (inputs.argocd || inputs.monitoring || inputs.kyverno) }}
         run: |
           NAMESPACES=""
           [ "$ARGOCD" = "true" ]          && NAMESPACES="$NAMESPACES argocd"
           [ "$MONITORING" = "true" ]      && NAMESPACES="$NAMESPACES monitoring"
-          [ "$POLICY_REPORTER" = "true" ] && NAMESPACES="$NAMESPACES kyverno"
+          [ "$KYVERNO" = "true" ]         && NAMESPACES="$NAMESPACES kyverno"
           for ns in $NAMESPACES; do
             kubectl wait --for=condition=Ready certificate --all -n "$ns" --timeout=10m
           done
 
       - name: Platform UIs reachable over HTTPS
-        if: ${{ inputs.nginx-ingress && inputs.cert-manager && inputs.external-dns && (inputs.argocd || inputs.monitoring || inputs.policy-reporter) }}
+        if: ${{ inputs.nginx-ingress && inputs.cert-manager && inputs.external-dns && (inputs.argocd || inputs.monitoring || inputs.kyverno) }}
         run: |
           URLS=""
           [ "$ARGOCD" = "true" ]          && URLS="$URLS https://admin-argocd.sctp-sandbox.com"
           [ "$MONITORING" = "true" ]      && URLS="$URLS https://admin-prom.sctp-sandbox.com https://admin-grafana.sctp-sandbox.com"
-          [ "$POLICY_REPORTER" = "true" ] && URLS="$URLS https://admin-policy-reporter.sctp-sandbox.com"
+          [ "$KYVERNO" = "true" ]         && URLS="$URLS https://admin-policy-reporter.sctp-sandbox.com"
           for url in $URLS; do
             curl -sSfL -o /dev/null --connect-timeout 15 --retry 10 --retry-delay 15 --retry-all-errors "$url"
             echo "OK  $url"

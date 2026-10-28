@@ -106,7 +106,6 @@ ADDONS=(
   kyverno
   metrics-server
   keda
-  policy-reporter
   loki
   opentelemetry-demo
   nginx-ingress
@@ -120,7 +119,7 @@ declare -A GATEWAY_ARGS=(
   [argocd]="gateway-values.yaml"
   [cert-manager]="gateway-values.yaml gateway-cluster-issuer.yaml"
   [kube-prometheus-stack]="gateway-values.yaml"
-  [policy-reporter]="gateway-values.yaml"
+  [kyverno]="gateway"
   [r53-externaldns]="gateway-values.yaml"
 )
 

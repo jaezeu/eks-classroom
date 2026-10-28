@@ -21,7 +21,7 @@ directory is self-contained: a `values.yaml` (Helm configuration) and an
 | [metrics-server](metrics-server/) | `kube-system` | metrics-server/metrics-server | 3.14.0 | `kubectl top` and HorizontalPodAutoscaler metrics |
 | [keda](keda/) | `monitoring` | kedacore/keda | 2.21.0 | Event-driven autoscaling |
 | [kyverno](kyverno/) | `kyverno` | kyverno/kyverno | 3.8.1 | Admission controller + [guardrail policies](../kyverno-policies/) |
-| [policy-reporter](policy-reporter/) | `kyverno` | policy-reporter/policy-reporter | 3.11.1 | Kyverno PolicyReport UI (needs Kyverno) |
+| [kyverno](kyverno/) (Policy Reporter) | `kyverno` | policy-reporter/policy-reporter | 3.11.1 | Kyverno PolicyReport UI; installed by `kyverno/init.sh` |
 | [trivy-operator](trivy-operator/) | `trivy-system` | aqua/trivy-operator | 0.37.0 | Workload vulnerability and config-audit reports |
 | [cilium](cilium/) | `kube-system` | cilium/cilium | 1.20.0-pre.4 | eBPF CNI, Hubble, Gateway API + ListenerSet (Cilium clusters) |
 | [cilium/tetragon](cilium/tetragon/) | `kube-system` | cilium/tetragon | v1.5.0 | eBPF runtime security (Cilium clusters) |
@@ -45,7 +45,7 @@ Cilium workflow passes the variant explicitly (e.g. `./init.sh gateway-values.ya
 | r53-externaldns | `gateway-values.yaml` (`gateway-httproute` source, ListenerSet resolution) |
 | argocd | `gateway-values.yaml` (ingress off, insecure server) + `gateway-route.yaml` (ListenerSet + HTTPRoute) |
 | kube-prometheus-stack | `gateway-values.yaml` (ingress off) + `gateway-route.yaml` (ListenerSet + 2 HTTPRoutes) |
-| policy-reporter | `gateway-values.yaml` (ingress off) + `gateway-route.yaml` (ListenerSet + HTTPRoute) |
+| kyverno (Policy Reporter) | `policy-reporter-gateway-values.yaml` (ingress off) + `policy-reporter-gateway-route.yaml` (ListenerSet + HTTPRoute), selected with `./init.sh gateway` |
 
 On the Cilium cluster the workflow creates one shared entrypoint,
 [`cilium/gateway/shared-gateway.yml`](cilium/gateway/shared-gateway.yml): a
@@ -71,7 +71,7 @@ Order matters, since several add-ons consume resources created by others:
 6. **tetragon**: Cilium clusters only; ships ServiceMonitors scraped by Prometheus (install after monitoring).
 7. **ebs-csi-driver**: needs its IRSA role. It also installs the default `gp3` StorageClass, so anything that asks for a volume can bind one.
 8. **metrics-server**: `kube-system` already exists, so the namespace-name policy does not apply. Gives `kubectl top` and the HorizontalPodAutoscaler API. **KEDA** installs into the `monitoring` namespace (shared with Prometheus when that is selected).
-9. **trivy-operator**, then **kyverno**, then **policy-reporter**: Trivy is first because the namespace-name policy would reject `trivy-system`. Kyverno is last among namespace-creating installs. Its [policies](../kyverno-policies/) enforce namespace naming and block deletions in protected namespaces. Policy Reporter is installed into the existing `kyverno` namespace (a new namespace would be rejected) and needs the PolicyReport CRDs, so select it together with Kyverno.
+9. **trivy-operator**, then **kyverno**: Trivy is first because the namespace-name policy would reject `trivy-system`. Kyverno is last among namespace-creating installs. Its [policies](../kyverno-policies/) enforce namespace naming and block deletions in protected namespaces. The same `init.sh` then installs Policy Reporter into the existing `kyverno` namespace (a new namespace would be rejected), where the PolicyReport CRDs it needs already exist.
 10. **opentelemetry-demo**: Cilium workflow only, after Prometheus and Loki, and before Kyverno. The namespace-name policy would reject `otel-demo`. Selecting it creates the node group as `m6g.xlarge`.
 
 Add-on charts that expose metrics ship a ServiceMonitor (`ingress-nginx`,
@@ -376,7 +376,9 @@ which is the webhook client.
 
 ### Policy Reporter
 
-Installed after Kyverno, into the `kyverno` namespace. The chart's default
+Installed by `kyverno/init.sh` after the guardrail policies, into the
+`kyverno` namespace, from `kyverno/policy-reporter-values.yaml` or the
+`policy-reporter-gateway-values.yaml` variant. The chart's default
 egress opens only TCP 6443. Both values files replace that with TCP 443 (the
 EKS API) and DNS on 53, for the core process and the Kyverno plugin. Ingress
 on 8080 has no source selector, so probes, Prometheus, the UI, nginx, and

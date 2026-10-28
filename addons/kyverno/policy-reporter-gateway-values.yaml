@@ -1,6 +1,7 @@
-# Cilium cluster: ingress stays off. The workflow applies gateway-route.yaml
-# (ListenerSet + HTTPRoute) after this file. Same workload settings as
-# values.yaml; Helm does not merge the two files.
+# Policy Reporter (Cilium cluster): ingress stays off. kyverno/init.sh applies
+# policy-reporter-gateway-route.yaml (ListenerSet + HTTPRoute) after this
+# file. Same workload settings as policy-reporter-values.yaml; Helm does not
+# merge the two files.
 
 ui:
   enabled: true
