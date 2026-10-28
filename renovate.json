@@ -17,6 +17,16 @@
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) registryUrl=(?<registryUrl>\\S+)[\\s\\S]*?--version (?<currentValue>\\S+)"
       ]
+    },
+    {
+      "customType": "regex",
+      "description": "kube-prometheus-stack CRD pin in install-crds.sh (must stay in lockstep with the chart version in init.sh)",
+      "managerFilePatterns": [
+        "**/install-crds.sh"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) registryUrl=(?<registryUrl>\\S+)\\s+chart_version=(?<currentValue>\\S+)"
+      ]
     }
   ],
   "packageRules": [
@@ -40,6 +50,16 @@
         "helm"
       ],
       "automerge": false
+    },
+    {
+      "description": "grafana/loki chart 7.x is maintained for Grafana Enterprise Logs only; 6.55.0 is the last OSS release. Moving on means switching to the grafana-community/loki chart (see addons/loki/init.sh).",
+      "matchDatasources": [
+        "helm"
+      ],
+      "matchDepNames": [
+        "loki"
+      ],
+      "allowedVersions": "<7"
     }
   ]
 }

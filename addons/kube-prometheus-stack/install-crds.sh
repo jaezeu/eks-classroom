@@ -15,7 +15,7 @@ fi
 
 # Keep in lockstep with addons/kube-prometheus-stack/init.sh.
 # renovate: datasource=helm depName=kube-prometheus-stack registryUrl=https://prometheus-community.github.io/helm-charts
-chart_version=86.2.2
+chart_version=92.14.1
 
 crds="$(mktemp)"
 trap 'rm -f "$crds"' EXIT

@@ -1,4 +1,4 @@
-# promtail 6.7.4: serviceMonitor.enabled also creates the metrics Service.
+# promtail 6.17.1: serviceMonitor.enabled also creates the metrics Service.
 serviceMonitor:
   enabled: true
 # Same-namespace traffic covers the push to the Loki gateway. Metrics stay

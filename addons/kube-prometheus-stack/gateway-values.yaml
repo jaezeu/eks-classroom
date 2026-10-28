@@ -111,22 +111,21 @@ alertmanager:
 
 kube-state-metrics:
   # Readiness is on the metrics port (8081). The chart only opens that port
-  # in the Cilium policy when self-monitoring is on.
+  # in the policy when self-monitoring is on.
   selfMonitor:
     enabled: true
+  # kube-state-metrics chart 8.x (kube-prometheus-stack 92) dropped the cilium
+  # flavor and the cilium.kubeApiServerSelector key; it only renders a
+  # Kubernetes NetworkPolicy now, which Cilium enforces. The template always
+  # sets policy types Ingress and Egress, so an egress list is required or the
+  # API watch is blocked. 443 is the EKS API; 53 is CoreDNS.
   networkPolicy:
     enabled: true
-    flavor: cilium
-    cilium:
-      # This key replaces the whole egress list, so DNS has to be in it.
-      kubeApiServerSelector:
-        - toEntities:
-            - kube-apiserver
-        - toEndpoints:
-            - matchLabels:
-                k8s:io.kubernetes.pod.namespace: kube-system
-                k8s:k8s-app: kube-dns
-          toPorts:
-            - ports:
-                - port: "53"
-                  protocol: ANY
+    egress:
+      - ports:
+          - port: 443
+            protocol: TCP
+          - port: 53
+            protocol: UDP
+          - port: 53
+            protocol: TCP

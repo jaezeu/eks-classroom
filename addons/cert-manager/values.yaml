@@ -15,7 +15,7 @@ config:
   kind: ControllerConfiguration
   # enableGatewayAPI: true
 
-# cert-manager v1.20.2: prometheus.servicemonitor (lowercase).
+# cert-manager v1.21.3: prometheus.servicemonitor (lowercase).
 # PodMonitor and ServiceMonitor are mutually exclusive in this chart.
 prometheus:
   enabled: true

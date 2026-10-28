@@ -21,6 +21,11 @@ enableGatewayListenerSets: true
 logLevel: info #[panic, debug, info, warning, error, fatal]
 logFormat: text # text / json
 
-# external-dns 1.21.1 scrapes the http Service (:7979 /metrics).
+# external-dns 1.23.0 scrapes the http Service (:7979 /metrics).
 serviceMonitor:
   enabled: true
+
+# external-dns 0.22 (chart 1.22) switched the default annotation prefix to
+# external-dns.kubernetes.io/ with no fallback. Every hostname annotation in
+# this repo still uses the alpha prefix, so keep reading that one.
+annotationPrefix: external-dns.alpha.kubernetes.io/

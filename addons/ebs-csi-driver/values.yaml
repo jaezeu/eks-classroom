@@ -2,7 +2,7 @@ controller:
   serviceAccount:
     annotations:
       eks.amazonaws.com/role-arn: ${EBS_CSI_ROLE_ARN} # substituted from the Terraform output ebs_csi_driver_role_arn
-  # aws-ebs-csi-driver 2.61.1 has no serviceMonitor.enabled flag. enableMetrics
+  # aws-ebs-csi-driver 2.67.2 has no serviceMonitor.enabled flag. enableMetrics
   # creates the metrics Services, and the chart adds ServiceMonitors when the
   # Prometheus Operator CRD is installed (serviceMonitor.forceEnable stays false).
   enableMetrics: true

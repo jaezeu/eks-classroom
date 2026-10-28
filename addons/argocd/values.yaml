@@ -19,7 +19,7 @@ server:
       nginx.ingress.kubernetes.io/ssl-passthrough: "true"
       nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
     tls: true
-  # argo-cd 9.5.21: metrics.enabled creates the metrics Service;
+  # argo-cd 10.11.6: metrics.enabled creates the metrics Service;
   # metrics.serviceMonitor.enabled creates the ServiceMonitor.
   metrics:
     enabled: true
