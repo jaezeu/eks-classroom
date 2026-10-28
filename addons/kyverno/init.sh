@@ -26,7 +26,7 @@ esac
 
 # --wait so the admission webhooks are ready before the policies are applied
 # renovate: datasource=helm depName=kyverno registryUrl=https://kyverno.github.io/kyverno/
-helm upgrade --install kyverno kyverno --repo https://kyverno.github.io/kyverno/ --version 3.8.1 \
+helm upgrade --install kyverno kyverno --repo https://kyverno.github.io/kyverno/ --version 3.9.2 \
   --namespace kyverno \
   --create-namespace \
   --values "$ROOT/values.yaml" \
