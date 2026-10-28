@@ -44,7 +44,7 @@ fi
 # renovate: datasource=helm depName=policy-reporter registryUrl=https://kyverno.github.io/policy-reporter
 helm upgrade --install policy-reporter policy-reporter \
   --repo https://kyverno.github.io/policy-reporter \
-  --version 3.11.1 \
+  --version 3.11.2 \
   --namespace kyverno \
   --values "$REPORTER_VALUES"
 
