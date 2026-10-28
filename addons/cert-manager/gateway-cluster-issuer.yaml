@@ -11,8 +11,8 @@ metadata:
   name: letsencrypt-gateway
 spec:
   acme:
-    server: https://acme-v02.api.letsencrypt.org/directory
-    email: ${EMAIL} # substituted by the workflow (secrets.EMAIL_ADDRESS)
+    server: ${ACME_SERVER} # production or staging directory URL, substituted by init.sh
+    email: ${EMAIL} # substituted by init.sh from the workflow env (secrets.EMAIL_ADDRESS)
     privateKeySecretRef:
       name: letsencrypt-gateway
     solvers:

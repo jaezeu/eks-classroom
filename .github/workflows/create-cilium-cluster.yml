@@ -22,6 +22,11 @@ on:
         description: "Deploy CertManager?"
         default: false
         required: true
+      staging-certs:
+        type: boolean
+        description: "Use the Let's Encrypt staging directory? (untrusted certs; keeps rehearsals off the production quota)"
+        default: false
+        required: true
       argocd:
         type: boolean
         description: "Deploy ArgoCD?"
@@ -84,6 +89,9 @@ on:
         type: boolean
         default: false
       cert-manager:
+        type: boolean
+        default: false
+      staging-certs:
         type: boolean
         default: false
       argocd:
@@ -282,9 +290,9 @@ jobs:
         working-directory: addons/cert-manager
         env:
           EMAIL: ${{ secrets.EMAIL_ADDRESS }}
-        run: |
-          ./init.sh gateway-values.yaml gateway-cluster-issuer.yaml
-          envsubst < gateway-cluster-issuer.yaml | kubectl apply -f -
+          # init.sh substitutes both into the ClusterIssuer before applying it.
+          ACME_SERVER: ${{ inputs.staging-certs && 'https://acme-staging-v02.api.letsencrypt.org/directory' || 'https://acme-v02.api.letsencrypt.org/directory' }}
+        run: ./init.sh gateway-values.yaml gateway-cluster-issuer.yaml
 
       - name: Deploy ArgoCD
         if: ${{ inputs.argocd }}
@@ -371,6 +379,7 @@ jobs:
     env:
       EXTERNAL_DNS: ${{ inputs.external-dns }}
       CERT_MANAGER: ${{ inputs.cert-manager }}
+      STAGING_CERTS: ${{ inputs.staging-certs }}
       ARGOCD: ${{ inputs.argocd }}
       MONITORING: ${{ inputs.monitoring }}
       KEDA: ${{ inputs.keda }}
@@ -435,8 +444,12 @@ jobs:
           [ "$ARGOCD" = "true" ]          && URLS="$URLS https://gateway-argocd.sctp-sandbox.com"
           [ "$MONITORING" = "true" ]      && URLS="$URLS https://gateway-admin-prom.sctp-sandbox.com https://gateway-admin-grafana.sctp-sandbox.com"
           [ "$KYVERNO" = "true" ]         && URLS="$URLS https://gateway-policy-reporter.sctp-sandbox.com"
+          # Staging certificates chain to an untrusted root; -k keeps the
+          # check meaningful (-f still requires a 2xx/3xx from the backend).
+          CURL_OPTS=()
+          [ "$STAGING_CERTS" = "true" ] && CURL_OPTS+=(-k)
           for url in $URLS; do
-            curl -sSfL -o /dev/null --connect-timeout 15 --retry 10 --retry-delay 15 --retry-all-errors "$url"
+            curl "${CURL_OPTS[@]}" -sSfL -o /dev/null --connect-timeout 15 --retry 10 --retry-delay 15 --retry-all-errors "$url"
             echo "OK  $url"
           done
 

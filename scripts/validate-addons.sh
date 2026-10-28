@@ -25,6 +25,7 @@ export LOKI_S3_ROLE_ARN="arn:aws:iam::111111111111:role/dummy"
 export LOKI_CHUNKS_BUCKET="dummy-chunks"
 export LOKI_RULER_BUCKET="dummy-ruler"
 export EMAIL="dummy@example.com"
+export ACME_SERVER="https://acme-staging-v02.api.letsencrypt.org/directory"
 
 kubeconform_cmd() {
   kubeconform \
@@ -82,7 +83,10 @@ kubectl() {
         prev="$a"
       done
       echo "  kubectl apply -f $path -> kubeconform" >&2
-      if [ -d "$path" ]; then
+      if [ "$path" = "-" ]; then
+        # piped in (e.g. cert-manager's envsubst'd issuer): already substituted
+        kubeconform_cmd -
+      elif [ -d "$path" ]; then
         envsubst_dir="$(mktemp -d)"
         for f in "$path"/*.y*ml; do envsubst < "$f" > "$envsubst_dir/$(basename "$f")"; done
         kubeconform_cmd "$envsubst_dir"
