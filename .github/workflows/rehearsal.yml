@@ -1,5 +1,6 @@
 # Monthly proof the platform can be rebuilt from nothing: create both cluster
-# types with every addon, let their verify jobs pass, then tear down again.
+# types in parallel with every addon, let their verify jobs pass, then tear
+# down again.
 # Reuses the same workflows that manual dispatches run.
 #
 # Cluster names and DNS hostnames are fixed, so rehearsing over a live cluster
@@ -85,12 +86,14 @@ jobs:
       cluster_type: cilium-cluster
     secrets: inherit
 
-  # Sequential (after the cilium teardown), not parallel: one cluster's cost at
-  # a time, and no chance of the two external-dns instances interacting.
+  # Runs in parallel with the Cilium leg (both in the same region) to halve the
+  # rehearsal wall-clock time. Separate Terraform workspaces, name prefixes and
+  # hostnames keep the two legs independent; each external-dns only touches
+  # records it owns (policy sync + txtOwnerId), so the shared zone is safe.
   standard:
     name: Standard cluster
-    needs: [precheck, cilium-cleanup]
-    if: ${{ !cancelled() && needs.precheck.outputs.proceed == 'true' }}
+    needs: [precheck]
+    if: ${{ needs.precheck.outputs.proceed == 'true' }}
     uses: ./.github/workflows/create-standard-cluster.yml
     with:
       region: ap-southeast-1
