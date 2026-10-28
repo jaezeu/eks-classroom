@@ -6,18 +6,18 @@ enforce guardrails on this shared learning cluster. All policies run in
 
 > Requires the Kyverno admission controller to be installed in the cluster
 > first (`kyverno` namespace). The cluster creation workflows have a
-> **security** toggle that installs it via [addons/kyverno](../addons/kyverno/)
+> **kyverno** toggle that installs it via [addons/kyverno](../addons/kyverno/)
 > and applies these policies automatically (as the last bootstrap step).
 
 ## Policies
 
 | Policy | Enforces |
 |--------|----------|
-| [disallow-default-namespace](disallow-default-namespace.yaml) | Blocks creating resources in the `default` namespace, forcing workloads into named namespaces. |
+| [disallow-default-namespace](disallow-default-namespace.yaml) | Blocks creating workload resources in the `default` and `kube-prometheus-stack` namespaces, forcing workloads into named namespaces. |
 | [restrict-namespace-name-format](restrict-namespace-name-format.yaml) | New namespace names must match the `*-eks-activity` format. |
 | [restrict-ingress-hosts](restrict-ingress-hosts.yaml) | Ingress hosts must fall under `*.sctp-sandbox.com` (standard cluster). |
 | [gateway-api/restrict-gateway-hostnames](gateway-api/restrict-gateway-hostnames.yaml) | Same domain guardrail for `HTTPRoute`/`ListenerSet` hostnames (Cilium cluster; applied only where the Gateway API CRDs exist). |
-| [prevent-deletion-in-protected-namespaces](prevent-deletion-in-protected-namespaces.yaml) | Blocks deletion of **any** resource inside protected namespaces (`kube-system`, `ingress-nginx`, `cert-manager`, `external-dns`, `argocd`, `kyverno`). |
+| [prevent-deletion-in-protected-namespaces](prevent-deletion-in-protected-namespaces.yaml) | Blocks deletion of workload, config and RBAC resources inside protected namespaces (`kube-system`, `ingress-nginx`, `cert-manager`, `external-dns`, `argocd`, `kyverno`). Kinds are listed explicitly rather than `*` so the webhook does not intercept every object in the cluster. |
 | [prevent-protected-namespace-deletion](prevent-protected-namespace-deletion.yaml) | Blocks deletion of the protected namespaces themselves. |
 
 ## Apply

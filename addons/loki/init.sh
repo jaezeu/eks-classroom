@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 
-# ServiceMonitor CRDs. Loki renders its monitor only when the API is installed;
-# Promtail always renders one when serviceMonitor.enabled is true.
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-"$ROOT/../kube-prometheus-stack/install-crds.sh"
 
 # The Cilium workflow passes "cilium" so Loki emits CiliumNetworkPolicy.
 # Any other invocation keeps the Kubernetes NetworkPolicy in loki-values.yaml.

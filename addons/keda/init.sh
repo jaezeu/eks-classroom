@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 
-# ServiceMonitor CRDs. The chart emits one per component when prometheus is on.
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-"$ROOT/../kube-prometheus-stack/install-crds.sh"
 
 # The Cilium workflow passes "cilium" so KEDA emits CiliumNetworkPolicy.
 # Any other invocation keeps the Kubernetes NetworkPolicy in values.yaml.

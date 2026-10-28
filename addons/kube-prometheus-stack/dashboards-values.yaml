@@ -151,12 +151,10 @@ grafana:
       argocd:
         url: https://raw.githubusercontent.com/argoproj/argo-cd/v3.4.3/examples/dashboard.json
         datasource: *dsVariable
-      keda: 
+      keda:
         gnetId: 23951
         revision: 1
-        datasource:
-          - name: DS_PROMETHEUS
-            value: prometheus
+        datasource: *dsPrometheus
       # Loki and Promtail are not listed here. init.sh mounts
       # dashboards/loki-logs.json and dashboards/promtail.json with --set-file.
       # The upstream boards select a cluster label and a shared job that this

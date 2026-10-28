@@ -72,7 +72,6 @@ This repository supports two EKS networking architectures. Use this to decide:
 | Service routing | kube-proxy (iptables) | eBPF datapath |
 | Observability | Add-ons only | + Hubble (flow visibility) |
 | Runtime security | Add-ons only | + Tetragon |
-| mTLS / identity | - | + SPIRE (mutual auth) |
 | Ingress | NGINX Ingress | Gateway API (shared `Gateway` + per-app `ListenerSet`) |
 | Bootstrap | Single `terraform apply` | Split apply (CNI before nodes) |
 | Choose it for | General-purpose workloads, learning | High-performance networking, security & observability deep-dives |
@@ -85,8 +84,7 @@ cluster's node groups only become healthy once Cilium itself is installed
 (hence the split apply).
 
 The Cilium deployment bundles a full eBPF stack: Hubble for flow visibility,
-Tetragon for runtime security, SPIRE for mutual (mTLS) authentication, and the
-Gateway API for ingress.
+Tetragon for runtime security, and the Gateway API for ingress.
 
 ![Cilium stack deep dive](docs/images/cilium-architecture.png)
 
@@ -121,7 +119,7 @@ example walks through the same pattern side by side with its classic
 |-----------|------------|
 | [terraform/eks-cluster/](terraform/eks-cluster/) | The cluster itself: VPC, EKS, node groups, IRSA roles. `.tfvars` files select standard vs Cilium mode. |
 | [terraform/eks-cluster-deployer-role/](terraform/eks-cluster-deployer-role/) | Bootstrap step: the IAM role (GitHub OIDC) that the workflows assume. Run once, first. |
-| [addons/](addons/) | One directory per Helm add-on (argocd, cert-manager, cilium, ebs-csi-driver, keda, kube-prometheus-stack, kyverno, loki, metrics-server, nginx-ingress, opentelemetry-demo, policy-reporter, r53-externaldns, trivy-operator). Each has its values file(s) and an `init.sh`. |
+| [addons/](addons/) | One directory per Helm add-on (argocd, cert-manager, cilium, ebs-csi-driver, keda, kube-prometheus-stack, kyverno (with Policy Reporter), loki, metrics-server, nginx-ingress, opentelemetry-demo, r53-externaldns, trivy-operator). Each has its values file(s) and an `init.sh`. |
 | [kyverno-policies/](kyverno-policies/) | The guardrail admission policies that `addons/kyverno` enforces. `gateway-api/` subfolder applies only on Cilium clusters. |
 | [deployment-manifests-examples/](deployment-manifests-examples/) | Plain-manifest teaching examples. `ingress-coaching/` targets the standard cluster, `gateway-api-coaching/` the Cilium one. |
 | [scripts/](scripts/) | Learner namespace provisioning and the add-on render/validation check CI uses. |
@@ -140,9 +138,11 @@ Use the workflows in `.github/workflows` to create and destroy clusters:
 - `create-deployer-role.yml` - creates the IAM role the other workflows assume (run first; the account's shared GitHub OIDC provider must already exist, this looks it up rather than creating it)
 - `create-standard-cluster.yml` - standard cluster: VPC CNI + add-ons
 - `create-cilium-cluster.yml` - Cilium cluster: Cilium CNI + add-ons
-
-**Deploy everything?** is the first option on both create workflows. It installs every platform add-on for that cluster. Leave it off to pick add-ons one by one. **Security** installs Kyverno, Policy Reporter, and Trivy Operator together. Metrics Server and KEDA install with Prometheus. The OpenTelemetry demo is a Cilium-only option and is not included; selecting it creates `m6g.xlarge` nodes.
 - `cleanup.yml` - tears down everything the cluster workflows created
+
+Each add-on is its own toggle on the create workflows; pick them one by one.
+The OpenTelemetry demo is a Cilium-only option; selecting it creates
+`m6g.xlarge` nodes.
 
 Every cluster workflow ends with a **verify job** (workload rollouts, policies,
 TLS certs, live HTTPS checks). Cleanup **sweeps orphans** that terraform can't

@@ -21,7 +21,6 @@ autoDirectNodeRoutes: true
 egressMasqueradeInterfaces: eth0
 bpf:
   masquerade: false
-hostLegacyRouting: false
 
 # kube-proxy replacement: Cilium must reach the API server directly since
 # there is no kube-proxy to route the in-cluster kubernetes Service

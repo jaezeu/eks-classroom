@@ -74,7 +74,7 @@ jobs:
             addons/cilium/gateway/ \
             addons/argocd/gateway-route.yaml \
             addons/kube-prometheus-stack/gateway-route.yaml \
-            addons/policy-reporter/gateway-route.yaml
+            addons/kyverno/policy-reporter-gateway-route.yaml
 
   validate-addons:
     name: Render & validate add-on charts

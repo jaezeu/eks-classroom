@@ -9,7 +9,7 @@
 # entries are copied and PROMETHEUS_ADDR points at the in-cluster Prometheus.
 #
 # Install after Prometheus and Loki, and before Kyverno. The namespace-name
-# policy rejects otel-demo. This add-on is not part of Deploy everything.
+# policy rejects otel-demo.
 # Network policy is networkpolicy.yaml, applied by init.sh. The chart
 # switches cannot name the EKS API or kubelet.
 

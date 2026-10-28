@@ -4,8 +4,8 @@
 # Gateway. HTTPRoute sends that hostname to policy-reporter-ui (HTTP :8080,
 # TLS already terminated at the Gateway).
 #
-# Applied by the Cilium workflow after addons/policy-reporter/init.sh, and
-# only when Kyverno is enabled. The hostname must end in .sctp-sandbox.com.
+# Applied by addons/kyverno/init.sh (gateway variant) right after the Policy
+# Reporter release. The hostname must end in .sctp-sandbox.com.
 apiVersion: gateway.networking.k8s.io/v1
 kind: ListenerSet
 metadata:

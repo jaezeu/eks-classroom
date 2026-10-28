@@ -1,5 +1,6 @@
-# UI and Kyverno plugin for PolicyReports. The chart turns the REST API on
-# when the UI is enabled. Installed into the existing kyverno namespace.
+# Policy Reporter (standard cluster): UI and Kyverno plugin for PolicyReports.
+# The chart turns the REST API on when the UI is enabled. Installed by
+# kyverno/init.sh into the existing kyverno namespace.
 
 ui:
   enabled: true

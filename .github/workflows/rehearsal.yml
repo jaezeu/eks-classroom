@@ -59,7 +59,17 @@ jobs:
     uses: ./.github/workflows/create-cilium-cluster.yml
     with:
       region: ap-southeast-1
-      deploy-everything: true
+      external-dns: true
+      cert-manager: true
+      argocd: true
+      monitoring: true
+      metrics-server: true
+      keda: true
+      logging: true
+      tetragon: true
+      ebs-csi: true
+      trivy-operator: true
+      kyverno: true
     secrets: inherit
 
   # !cancelled() so the teardown always runs after its create leg, even a failed
@@ -88,11 +98,12 @@ jobs:
       cert-manager: true
       argocd: true
       monitoring: true
+      metrics-server: true
+      keda: true
       logging: true
       ebs-csi: true
-      kyverno: true
-      metrics-server: true
       trivy-operator: true
+      kyverno: true
     secrets: inherit
 
   standard-cleanup:
