@@ -144,8 +144,9 @@ Each add-on is its own toggle on the create workflows; pick them one by one.
 The OpenTelemetry demo is a Cilium-only option; selecting it creates
 `m6g.xlarge` nodes.
 
-Every cluster workflow ends with a **verify job** (workload rollouts, policies,
-TLS certs, live HTTPS checks). Cleanup **sweeps orphans** that terraform can't
+Every cluster workflow ends with a **verify job** (workload rollouts, logs
+reaching Loki, every Prometheus scrape target up, policies, TLS certs, live
+HTTPS checks). Cleanup **sweeps orphans** that terraform can't
 see (load balancers by cluster tag, DNS records by external-dns ownership)
 before `terraform destroy` removes the rest. A
 [monthly rehearsal](.github/workflows/rehearsal.yml) rebuilds both clusters
