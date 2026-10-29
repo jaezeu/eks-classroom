@@ -1,9 +1,0 @@
-# promtail 6.17.1: serviceMonitor.enabled also creates the metrics Service.
-serviceMonitor:
-  enabled: true
-# Same-namespace traffic covers the push to the Loki gateway. Metrics stay
-# open so Prometheus can scrape. The chart default API port is 8443; EKS is 443.
-networkPolicy:
-  enabled: true
-  k8sApi:
-    port: 443

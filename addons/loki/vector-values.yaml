@@ -1,0 +1,144 @@
+# Vector 0.60 (chart 0.60.0) as the per-node log shipper, replacing Promtail.
+# One DaemonSet pod per node tails /var/log/pods and pushes to the Loki
+# gateway in this namespace with the labels Promtail's chart set, so the
+# Loki / Logs board and any saved LogQL keep working.
+#
+# The chart passes customConfig through Helm tpl. Vector's own {{ field }}
+# templates are therefore written as {{ "{{ field }}" }} below; the rendered
+# ConfigMap carries the plain Vector form.
+role: Agent
+
+# The chart labels its pods vector.dev/exclude=true and the kubernetes_logs
+# source skips such pods. Flip it so Vector's own logs reach Loki (the Vector
+# board shows them).
+podLabels:
+  vector.dev/exclude: "false"
+
+# JSON logs so the board can split Vector's own logs by level with | json.
+env:
+  - name: VECTOR_LOG_FORMAT
+    value: json
+
+# Promtail's chart set none. Teaching clusters run m6g.large nodes that are
+# already busy with Prometheus and Loki, so a memory limit keeps a backlog
+# from evicting neighbours.
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+# Scraped by pod IP on the port the chart derives from the prom_exporter sink
+# (container port prom-exporter, which is the chart default here).
+# kube-prometheus-stack picks it up with podMonitorSelectorNilUsesHelmValues: false.
+podMonitor:
+  enabled: true
+
+# Nothing dials Vector: the API listens on localhost and metrics are scraped
+# through the PodMonitor, so the chart Services are left out.
+service:
+  enabled: false
+serviceHeadless:
+  enabled: false
+
+# Egress only. The chart has no network-policy switch, so this is an extra
+# manifest. DNS comes from loki-dns-all and the metrics scrape from
+# loki-ingress-monitoring in loki-values.yaml, which select every pod in the
+# namespace. 8080 is the Loki gateway container port (the push). 443 with no
+# CIDR is the EKS API: kubernetes_logs watches pods, namespaces, and nodes.
+# Log files are read from the node's filesystem, not over the kubelet port.
+extraObjects:
+  - apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: vector
+      namespace: loki
+    spec:
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: vector
+          app.kubernetes.io/instance: vector
+      policyTypes:
+        - Egress
+      egress:
+        - to:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: loki
+                  app.kubernetes.io/instance: loki
+                  app.kubernetes.io/component: gateway
+          ports:
+            - port: 8080
+              protocol: TCP
+        - ports:
+            - port: 443
+              protocol: TCP
+
+customConfig:
+  # The chart mounts the node's /var/lib/vector here; kubernetes_logs keeps
+  # its file checkpoints in it, as Promtail kept positions under /run/promtail.
+  data_dir: /vector-data-dir
+  api:
+    enabled: true
+    address: 127.0.0.1:8686
+  sources:
+    kubernetes_logs:
+      type: kubernetes_logs
+    internal_metrics:
+      type: internal_metrics
+  transforms:
+    # Promtail derived app, instance, and component from pod labels with
+    # fallbacks. A Loki label template that fails to render drops the event,
+    # so these are built here and only set when a value exists. app always
+    # ends up set (name label, app label, controller name, then pod name),
+    # which keeps job = namespace/app renderable for every pod.
+    loki_labels:
+      type: remap
+      inputs:
+        - kubernetes_logs
+      source: |
+        .loki = {}
+        if exists(.kubernetes.pod_labels."app.kubernetes.io/name") {
+          .loki.app = .kubernetes.pod_labels."app.kubernetes.io/name"
+        } else if exists(.kubernetes.pod_labels.app) {
+          .loki.app = .kubernetes.pod_labels.app
+        } else if exists(.kubernetes.pod_owner) {
+          owner = replace(string!(.kubernetes.pod_owner), r'^[^/]+/', "")
+          .loki.app = replace(owner, r'-[0-9a-f]{8,10}$', "")
+        } else {
+          .loki.app = .kubernetes.pod_name
+        }
+        if exists(.kubernetes.pod_labels."app.kubernetes.io/instance") {
+          .loki.instance = .kubernetes.pod_labels."app.kubernetes.io/instance"
+        } else if exists(.kubernetes.pod_labels.instance) {
+          .loki.instance = .kubernetes.pod_labels.instance
+        }
+        if exists(.kubernetes.pod_labels."app.kubernetes.io/component") {
+          .loki.component = .kubernetes.pod_labels."app.kubernetes.io/component"
+        } else if exists(.kubernetes.pod_labels.component) {
+          .loki.component = .kubernetes.pod_labels.component
+        }
+  sinks:
+    loki:
+      type: loki
+      inputs:
+        - loki_labels
+      endpoint: http://loki-gateway.loki.svc.cluster.local
+      # The CRI line content only, as Promtail's cri stage sent it.
+      encoding:
+        codec: raw_message
+      labels:
+        namespace: '{{ "{{ kubernetes.pod_namespace }}" }}'
+        pod: '{{ "{{ kubernetes.pod_name }}" }}'
+        container: '{{ "{{ kubernetes.container_name }}" }}'
+        node_name: '{{ "{{ kubernetes.pod_node_name }}" }}'
+        stream: '{{ "{{ stream }}" }}'
+        job: '{{ "{{ kubernetes.pod_namespace }}/{{ loki.app }}" }}'
+        # Expands the .loki object into app, instance, and component labels.
+        "*": '{{ "{{ loki }}" }}'
+    prom_exporter:
+      type: prometheus_exporter
+      inputs:
+        - internal_metrics
+      address: 0.0.0.0:9090
