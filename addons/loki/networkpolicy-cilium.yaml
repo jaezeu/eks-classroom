@@ -1,4 +1,0 @@
-# Passed only by the Cilium workflow (./init.sh cilium). Merged on top of
-# loki-values.yaml. Cilium enforces the Kubernetes policies in that file too.
-networkPolicy:
-  flavor: cilium

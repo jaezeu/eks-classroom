@@ -129,9 +129,9 @@ lokiCanary:
   #         name: canary-basic-auth
   #         key: username
 
-# Enable minio for storage
-minio:
- enabled: false
+# The chart's values schema rejects unknown top-level keys, and the MinIO
+# subchart was removed in 20.0, so there is no minio block here. Storage is
+# the S3 config above.
 
 backend:
  replicas: 0
@@ -143,24 +143,22 @@ write:
 singleBinary:
  replicas: 0
 
-# loki 6.55.0 still creates ServiceMonitors from monitoring.serviceMonitor
-# (marked deprecated in the chart, but it is the key this version honors).
-# metricsInstance is the Grafana Agent CR; leave it off so only Prometheus scrapes.
+# The ServiceMonitor relabels job to loki/<service> and adds app_instance=loki
+# (chart 18 renamed that label from cluster). Dashboards, rules, and alerts
+# from the chart stay off; Grafana provisions dashboards/loki-logs.json from
+# the kube-prometheus-stack add-on instead.
 monitoring:
   serviceMonitor:
     enabled: true
-    metricsInstance:
-      enabled: false
 
-# Kubernetes NetworkPolicy on the standard cluster. The Cilium workflow passes
-# networkpolicy-cilium.yaml, which switches flavor to cilium.
+# Kubernetes NetworkPolicy on both clusters (Cilium enforces it too). The
+# chart's CiliumNetworkPolicy flavor was removed in 15.0.
 # Port 443 with no cidr allows S3 and the EKS API. DNS, gateway ingress, and
 # metrics ingress come from the chart. The chart alertmanager rule only
 # selects the backend target, which this install does not run, so the ruler
 # allow is an extra manifest below.
 networkPolicy:
   enabled: true
-  flavor: kubernetes
   externalStorage:
     ports:
       - 443

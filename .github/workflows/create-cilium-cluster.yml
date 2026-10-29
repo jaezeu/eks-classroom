@@ -320,7 +320,7 @@ jobs:
           # shellcheck disable=SC2016  # literal ${VAR} names are envsubst syntax, not shell
           envsubst '${REGION} ${LOKI_S3_ROLE_ARN} ${LOKI_CHUNKS_BUCKET} ${LOKI_RULER_BUCKET}' < loki-values.yaml > updated-values.yaml
           mv updated-values.yaml loki-values.yaml
-          ./init.sh cilium
+          ./init.sh
 
       - name: Deploy Tetragon
         if: ${{ inputs.tetragon }}

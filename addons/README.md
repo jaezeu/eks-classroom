@@ -15,7 +15,7 @@ directory is self-contained: a `values.yaml` (Helm configuration) and an
 | [nginx-ingress](nginx-ingress/) | `ingress-nginx` | ingress-nginx/ingress-nginx | 4.15.1 | HTTP(S) ingress |
 | [r53-externaldns](r53-externaldns/) | `external-dns` | external-dns/external-dns | 1.23.0 | Route 53 DNS automation |
 | [kube-prometheus-stack](kube-prometheus-stack/) | `monitoring` | prometheus-community/kube-prometheus-stack | 92.14.1 | Prometheus, Grafana, Alertmanager |
-| [loki](loki/) | `loki` | grafana/loki (+ promtail) | 6.55.0 | Log aggregation (S3 backend) |
+| [loki](loki/) | `loki` | grafana-community/loki (+ grafana/promtail) | 20.0.2 | Log aggregation (S3 backend) |
 | [opentelemetry-demo](opentelemetry-demo/) | `otel-demo` | open-telemetry/opentelemetry-demo | 0.42.6 | Astronomy shop on the Cilium workflow. Uses this Prometheus, Grafana, Loki, and Jaeger. Selects m6g.xlarge. |
 | [ebs-csi-driver](ebs-csi-driver/) | `kube-system` | aws-ebs-csi-driver | 2.67.2 | EBS volumes; default StorageClass `gp3` |
 | [metrics-server](metrics-server/) | `kube-system` | metrics-server/metrics-server | 3.14.0 | `kubectl top` and HorizontalPodAutoscaler metrics |
@@ -127,7 +127,7 @@ objects are installed and not applied there.
 | Prometheus | `prometheus.networkPolicy` (`flavor`) | CiliumNetworkPolicy | NetworkPolicy |
 | Prometheus Operator | `prometheusOperator.networkPolicy` (`flavor`) | CiliumNetworkPolicy | NetworkPolicy |
 | kube-state-metrics | `kube-state-metrics.networkPolicy` | NetworkPolicy | NetworkPolicy |
-| Loki | `networkPolicy` (`flavor`) | CiliumNetworkPolicy | NetworkPolicy |
+| Loki | `networkPolicy` | NetworkPolicy | NetworkPolicy |
 | KEDA (operator, metrics apiserver, webhooks) | `networkPolicy` (`flavor`) | CiliumNetworkPolicy | NetworkPolicy |
 | Alertmanager | `alertmanager.networkPolicy` | NetworkPolicy | NetworkPolicy |
 | Grafana | `grafana.networkPolicy` | NetworkPolicy | NetworkPolicy |
@@ -263,36 +263,34 @@ those ports.
 
 ### Loki and Promtail
 
-Loki's chart has `flavor: kubernetes` and `flavor: cilium`. `loki-values.yaml`
-enables the Kubernetes policy and is what the standard workflow installs. The
-Cilium workflow runs `./init.sh cilium`, which merges
-[`networkpolicy-cilium.yaml`](loki/networkpolicy-cilium.yaml) and switches
-the flavor. MinIO's subchart has the same switch; `minio.enabled` is false,
-so it is not rendered.
+Loki comes from the grafana-community chart, which only renders Kubernetes
+NetworkPolicy (the `flavor: cilium` switch was removed in chart 15.0).
+`loki-values.yaml` enables that policy and both workflows run the same
+`./init.sh`. The chart has no MinIO subchart since 20.0, and its values
+schema rejects unknown top-level keys, so there is no `minio` block.
 
 The chart's own rules, once enabled:
 
-- Same-namespace traffic. On Kubernetes this is `podSelector: {}` limited to
-  the `loki` namespace. On Cilium the chart selects `toEndpoints` /
-  `fromEndpoints` `{}`, which matches every endpoint in the cluster.
-- DNS UDP 53 for pods labeled `app.kubernetes.io/name: loki`.
-- Metrics port `http-metrics` from any source.
-- Gateway ingress on port `http-metrics`. The gateway container and Service
-  both name that port `http-metrics` (container 8080, Service 80). The
-  Cilium template also emits a port named `http`, which this gateway does
-  not have; the metrics rule is the one that opens the real port.
+- Same-namespace traffic: `podSelector: {}` limited to the `loki` namespace,
+  for pods labeled `app.kubernetes.io/name: loki`.
+- DNS UDP and TCP 53 to any namespace for pods labeled
+  `app.kubernetes.io/name: loki`.
+- Metrics port `http-metrics` from any source. On the gateway pod that is
+  the access-log-exporter sidecar (container 4040, Service
+  `loki-gateway-exporter`), which the chart ServiceMonitor scrapes.
+- Gateway ingress on port `http`. The gateway nginx container and the
+  `loki-gateway` Service both name that port `http` (container 8080, Service
+  80).
 - Alertmanager egress on 9093, selecting `app.kubernetes.io/component: backend`.
   This install is `deploymentMode: Distributed` with `backend.replicas: 0`,
   so that selector matches nothing. The ruler
   (`app.kubernetes.io/component: ruler`) is the process that posts to
   `http://kube-prometheus-stack-alertmanager.monitoring:9093`.
 - External storage TCP 443 with no CIDR, for every Loki-labeled pod. That
-  covers S3 and the EKS API. The chart's `egressKubeApiserver` rule only
-  selects the backend target, so it is left off. `egressWorld` is left off;
-  it only covers read, write, and backend, and it opens all world egress.
+  covers S3 and the EKS API.
 
-Three extra Kubernetes NetworkPolicies in `loki-values.yaml` apply on both
-clusters. Cilium enforces them alongside the Cilium policies:
+Four extra Kubernetes NetworkPolicies in `loki-values.yaml` apply on both
+clusters:
 
 - `loki-ruler-alertmanager`: ruler egress to Alertmanager in `monitoring` on
   TCP 9093. Alertmanager's ingress allows that port.
