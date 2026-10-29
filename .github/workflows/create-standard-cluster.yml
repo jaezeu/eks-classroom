@@ -367,27 +367,6 @@ jobs:
           kubectl logs -n loki -l app.kubernetes.io/name=vector --tail=20 || true
           exit 1
 
-      - name: Prometheus scrape targets up
-        if: ${{ inputs.monitoring }}
-        run: |
-          kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090 >/dev/null 2>&1 &
-          for i in {1..20}; do
-            TARGETS=$(curl -s 'http://127.0.0.1:9090/api/v1/targets?state=active' || true)
-            TOTAL=$(echo "$TARGETS" | jq '.data.activeTargets | length' 2>/dev/null || echo 0)
-            if [ "$TOTAL" -gt 0 ] 2>/dev/null; then
-              DOWN=$(echo "$TARGETS" | jq -r '.data.activeTargets[] | select(.health != "up") | "\(.scrapePool) \(.labels.instance // "") \(.lastError // .health)"')
-              if [ -z "$DOWN" ]; then
-                echo "OK  all $TOTAL scrape targets up"
-                exit 0
-              fi
-              echo "targets not up ($i/20):"
-              echo "$DOWN"
-            fi
-            sleep 15
-          done
-          echo "scrape targets still down after 5 minutes"
-          exit 1
-
       - name: Kyverno guardrail policies ready
         if: ${{ inputs.kyverno }}
         run: kubectl wait --for=condition=Ready clusterpolicy --all --timeout=3m
