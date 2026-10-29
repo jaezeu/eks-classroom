@@ -72,6 +72,20 @@ grafana:
         datasourceUid: jaeger
         traceIdLabelName: trace_id
         urlDisplayLabel: View trace
+# EKS runs the control plane, so there is nothing to scrape for these. Left
+# on, the chart creates endpoint-less Services and the matching *Down alerts
+# fire forever. kube-proxy does run on this cluster, but EKS binds its metrics
+# to 127.0.0.1, so that target is permanently down and would fail the
+# workflow's scrape-targets check.
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
+
 prometheus-node-exporter:
   extraArgs:
     - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/.+)($|/)
