@@ -145,7 +145,7 @@ The OpenTelemetry demo is a Cilium-only option; selecting it creates
 `m6g.xlarge` nodes.
 
 Every cluster workflow ends with a **verify job** (workload rollouts, logs
-reaching Loki, every Prometheus scrape target up, policies, TLS certs, live
+reaching Loki, policies, TLS certs, live
 HTTPS checks). Cleanup **sweeps orphans** that terraform can't
 see (load balancers by cluster tag, DNS records by external-dns ownership)
 before `terraform destroy` removes the rest. A
