@@ -15,7 +15,7 @@ directory is self-contained: a `values.yaml` (Helm configuration) and an
 | [nginx-ingress](nginx-ingress/) | `ingress-nginx` | ingress-nginx/ingress-nginx | 4.15.1 | HTTP(S) ingress |
 | [r53-externaldns](r53-externaldns/) | `external-dns` | external-dns/external-dns | 1.23.0 | Route 53 DNS automation |
 | [kube-prometheus-stack](kube-prometheus-stack/) | `monitoring` | prometheus-community/kube-prometheus-stack | 92.14.1 | Prometheus, Grafana, Alertmanager |
-| [loki](loki/) | `loki` | grafana-community/loki (+ grafana/promtail) | 20.0.2 | Log aggregation (S3 backend) |
+| [loki](loki/) | `loki` | grafana-community/loki (+ vector/vector 0.60.0) | 20.0.2 | Log aggregation (S3 backend); Vector ships node logs to it |
 | [opentelemetry-demo](opentelemetry-demo/) | `otel-demo` | open-telemetry/opentelemetry-demo | 0.42.6 | Astronomy shop on the Cilium workflow. Uses this Prometheus, Grafana, Loki, and Jaeger. Selects m6g.xlarge. |
 | [ebs-csi-driver](ebs-csi-driver/) | `kube-system` | aws-ebs-csi-driver | 2.67.2 | EBS volumes; default StorageClass `gp3` |
 | [metrics-server](metrics-server/) | `kube-system` | metrics-server/metrics-server | 3.14.0 | `kubectl top` and HorizontalPodAutoscaler metrics |
@@ -76,7 +76,8 @@ Order matters, since several add-ons consume resources created by others:
 
 Add-on charts that expose metrics ship a ServiceMonitor (`ingress-nginx`,
 `external-dns`, `cert-manager`, `argo-cd`, Cilium/Hubble, EBS CSI, Loki,
-Promtail, Kyverno, Metrics Server, KEDA, Policy Reporter, Tetragon, Trivy Operator).
+Kyverno, Metrics Server, KEDA, Policy Reporter, Tetragon, Trivy Operator).
+Vector ships a PodMonitor instead.
 Both cluster workflows run
 [`kube-prometheus-stack/install-crds.sh`](kube-prometheus-stack/install-crds.sh)
 once before the first add-on. It applies the Prometheus Operator CRDs from
@@ -84,15 +85,16 @@ kube-prometheus-stack `92.14.1` (the same pin as `init.sh`; Renovate updates
 both) when they are not already installed, so the
 monitors can be created before the monitoring stack itself. Running an
 `init.sh` by hand on a cluster without those CRDs needs that script first.
-The stack selects every ServiceMonitor
-(`serviceMonitorSelectorNilUsesHelmValues: false`).
+The stack selects every ServiceMonitor and PodMonitor
+(`serviceMonitorSelectorNilUsesHelmValues` and
+`podMonitorSelectorNilUsesHelmValues` are both `false`).
 
 Grafana files the add-ons that cluster installs into folders when its pod
 starts ([`kube-prometheus-stack/dashboards-values.yaml`](kube-prometheus-stack/dashboards-values.yaml)).
 The chart's own Kubernetes dashboards go in **Admin**. Both clusters get
 **Network** (external-dns, and the demo's NGINX board), **Security**
 (cert-manager, Kyverno, Trivy Operator), and **DevOps** (Argo CD, Loki,
-Promtail, and the demo's application boards). The demo's Linux board goes in
+Vector, and the demo's application boards). The demo's Linux board goes in
 **Admin** with the node dashboards. The standard cluster also gets the
 ingress-nginx dashboards; the Cilium cluster gets Cilium, Hubble, and
 Tetragon instead. The download runs from the Grafana init container, so the
@@ -132,7 +134,7 @@ objects are installed and not applied there.
 | Alertmanager | `alertmanager.networkPolicy` | NetworkPolicy | NetworkPolicy |
 | Grafana | `grafana.networkPolicy` | NetworkPolicy | NetworkPolicy |
 | node-exporter | `prometheus-node-exporter.networkPolicy` | NetworkPolicy | NetworkPolicy |
-| Promtail | `networkPolicy` | NetworkPolicy | NetworkPolicy |
+| Vector | none in the chart; `extraObjects` in `vector-values.yaml` | NetworkPolicy | NetworkPolicy |
 | cert-manager, webhook, cainjector | `networkPolicy` on each | NetworkPolicy | NetworkPolicy |
 | Kyverno (four controllers) | `<controller>.networkPolicy` | NetworkPolicy | NetworkPolicy |
 | Argo CD | `global.networkPolicy.create` | NetworkPolicy | NetworkPolicy |
@@ -261,7 +263,7 @@ which covers Prometheus and the gRPC call from the metrics apiserver, and
 does not cover the API server or the kubelet. The extra policies above supply
 those ports.
 
-### Loki and Promtail
+### Loki and Vector
 
 Loki comes from the grafana-community chart, which only renders Kubernetes
 NetworkPolicy (the `flavor: cilium` switch was removed in chart 15.0).
@@ -294,7 +296,7 @@ clusters:
 
 - `loki-ruler-alertmanager`: ruler egress to Alertmanager in `monitoring` on
   TCP 9093. Alertmanager's ingress allows that port.
-- `loki-dns-all`: every pod in the namespace (canary, memcached, Promtail)
+- `loki-dns-all`: every pod in the namespace (canary, memcached, Vector)
   to CoreDNS in `kube-system` on UDP and TCP 53. The chart DNS rule only
   selects Loki's own labels.
 - `loki-ingress-monitoring`: every pod in the namespace accepts ingress from
@@ -303,13 +305,16 @@ clusters:
 - `loki-ingress-otel-demo`: the gateway accepts TCP 8080 from the `otel-demo`
   namespace, so the collector can push OTLP logs.
 
-Promtail has no Cilium flavor. Its policy allows same-namespace traffic
-(the push to the Loki gateway), DNS, metrics from any source, and the
-Kubernetes API. The chart default API port is 8443; EKS serves the API on
-443, so `networkPolicy.k8sApi.port` is 443. Log files are read from the
-node, not over the kubelet port. The same-namespace rule uses
-`podSelector: {}`, which also selects the Loki pods. It adds an allow and
-does not remove the Loki, DNS, or 443 allows.
+Vector's chart has no network-policy switch, so
+[`vector-values.yaml`](loki/vector-values.yaml) adds one through
+`extraObjects`. It is egress only: the Loki gateway on TCP 8080 (the push)
+and TCP 443 with no CIDR for the EKS API, which the `kubernetes_logs`
+source watches for pods, namespaces, and nodes. Log files are read from the
+node's `/var/log/pods`, not over the kubelet port. DNS comes from
+`loki-dns-all` and the Prometheus scrape of the exporter port from
+`loki-ingress-monitoring`, both of which select every pod in the namespace.
+The Vector API stays on localhost and the chart Services are off, so
+nothing else needs to reach the pods.
 
 ### OpenTelemetry demo
 

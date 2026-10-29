@@ -10,6 +10,9 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 # renovate: datasource=helm depName=loki registryUrl=https://grafana-community.github.io/helm-charts
 helm upgrade --install loki loki --repo https://grafana-community.github.io/helm-charts --version 20.0.2 --values "$ROOT/loki-values.yaml" -n loki --create-namespace
 
-# renovate: datasource=helm depName=promtail registryUrl=https://grafana.github.io/helm-charts
-helm upgrade --install promtail promtail --repo https://grafana.github.io/helm-charts --version 6.17.1 --values promtail-values.yaml -n loki
+# Vector replaces Promtail (deprecated upstream) as the per-node log shipper.
+# It runs in this namespace so the Loki network policies and the verify
+# job's rollout check cover it.
+# renovate: datasource=helm depName=vector registryUrl=https://helm.vector.dev
+helm upgrade --install vector vector --repo https://helm.vector.dev --version 0.60.0 --values "$ROOT/vector-values.yaml" -n loki
 

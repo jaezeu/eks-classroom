@@ -8,6 +8,8 @@ prometheus:
     # Chart ServiceMonitors (Prometheus, Alertmanager, Grafana, node-exporter,
     # kube-state-metrics, kubelet) stay at the chart defaults, which are on.
     serviceMonitorSelectorNilUsesHelmValues: false
+    # Same for PodMonitors: Vector (addons/loki) ships one instead of a ServiceMonitor.
+    podMonitorSelectorNilUsesHelmValues: false
     # Cart Service Exemplars reads exemplars from the OTLP ingest.
     enableFeatures:
       - exemplar-storage

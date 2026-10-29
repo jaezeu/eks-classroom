@@ -20,7 +20,7 @@
 # datasourceRewrites is not a chart setting. It only holds YAML anchors for the
 # placeholder substitutions the download script applies. Prometheus is the
 # datasource kube-prometheus-stack provisions (uid prometheus). Loki is added
-# below (uid loki) for panels that query logs. The Loki and Promtail boards
+# below (uid loki) for panels that query logs. The Loki and Vector boards
 # are local JSON, already pointed at those uids, so they are not downloaded.
 
 datasourceRewrites:
@@ -155,10 +155,12 @@ grafana:
         gnetId: 23951
         revision: 1
         datasource: *dsPrometheus
-      # Loki and Promtail are not listed here. init.sh mounts
-      # dashboards/loki-logs.json and dashboards/promtail.json with --set-file.
-      # The upstream boards select a cluster label and a shared job that this
-      # install does not have, so the fixed JSON is what Grafana provisions.
+      # Loki and Vector are not listed here. init.sh mounts
+      # dashboards/loki-logs.json and dashboards/vector.json with --set-file.
+      # The upstream Loki boards select a cluster label and a shared job that
+      # this install does not have, and the public Vector boards carry node
+      # panels and a hard-coded datasource, so local JSON is what Grafana
+      # provisions.
       # The OpenTelemetry demo boards are sidecar ConfigMaps from that add-on.
       # Linux is Admin, the image-provider NGINX board is Network, and the
       # application boards are DevOps.

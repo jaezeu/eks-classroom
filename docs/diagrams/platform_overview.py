@@ -20,7 +20,8 @@ from diagrams.k8s.others import CRD
 from diagrams.k8s.podconfig import CM
 from diagrams.onprem.gitops import ArgoCD
 from diagrams.onprem.monitoring import Prometheus, Grafana
-from diagrams.onprem.logging import Loki, Fluentbit
+from diagrams.onprem.logging import Loki
+from diagrams.onprem.aggregator import Vector
 from diagrams.onprem.network import Nginx
 from diagrams.onprem.dns import Coredns
 from diagrams.custom import Custom
@@ -99,7 +100,7 @@ with Diagram(
 
                     with Cluster("ns: loki"):
                         loki = Loki("Loki\n(distributed, S3)")
-                        promtail = Fluentbit("Promtail")
+                        vector = Vector("Vector\n(DaemonSet)")
 
                     with Cluster("ns: kyverno"):
                         kyverno = Custom("Kyverno\nadmission policies", ICON("kyverno"))
@@ -113,7 +114,7 @@ with Diagram(
     # ---- observability scrape ----
     [tetragon, cilium] >> Edge(style="dotted", color="gray40", label="ServiceMonitor") >> prom
     prom >> Edge(color="orange") >> graf
-    promtail >> Edge(label="logs") >> loki
+    vector >> Edge(label="logs") >> loki
     loki >> Edge(color="orange") >> graf
 
     # ---- TLS + DNS automation ----
