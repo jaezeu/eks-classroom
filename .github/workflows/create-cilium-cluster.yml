@@ -1,5 +1,6 @@
 # This workflow creates the EKS cluster and deploy the addons as specified in the inputs
-name: Cilium CNI Cluster Creation & Bootstrap
+name: Cilium CNI Cluster Creation
+run-name: Cilium CNI Cluster Creation in ${{ inputs.region }}
 
 on:
   workflow_dispatch:
