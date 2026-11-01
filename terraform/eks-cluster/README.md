@@ -12,11 +12,9 @@ Pick a `.tfvars` file for the mode you want:
 - `cilium-wo-nodegroup.tfvars` - Cilium mode, no node groups yet (install Cilium first)
 - `cilium-with-nodegroup.tfvars` - Cilium mode with node groups (second apply, after Cilium is in)
 
-One boolean variable in `variables.tf` toggles an optional IRSA resource,
-defaulting to `true`:
-
-- `enable_external_dns` - IAM role for ExternalDNS with Route53
-
-The EBS CSI driver role is always created: the driver is installed on every
-cluster. VictoriaLogs keeps logs on an EBS volume, so there are no log
-buckets. Everything IRSA-related lives in `irsa.tf`.
+Both IRSA roles are always created; no variable toggles them. The ExternalDNS
+role is scoped to the Route53 hosted zone looked up by name in `data.tf`, so
+a fork changes the domain there rather than a zone ID. The EBS CSI driver
+role is unconditional because the driver is installed on every cluster.
+VictoriaLogs keeps logs on an EBS volume, so there are no log buckets.
+Everything IRSA-related lives in `irsa.tf`.
