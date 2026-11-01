@@ -6,7 +6,9 @@ directory is self-contained: a `values.yaml` (Helm configuration) and an
 `init.sh` scripts are invoked by the bootstrap job in the
 [cluster creation workflows](../.github/workflows), gated by per-add-on
 toggles. Two have no toggle and always install first: the EBS CSI driver and
-Metrics Server.
+Metrics Server. One toggle, `observability`, covers two add-ons:
+kube-prometheus-stack and victorialogs ship together because Grafana carries
+the VictoriaLogs datasource and dashboards.
 
 ## Add-ons at a glance
 
@@ -71,11 +73,11 @@ Order matters, since several add-ons consume resources created by others:
 4. **external-dns**: needs its [IRSA role](../terraform/eks-cluster/irsa.tf) (Route 53); publishes records for Ingress hosts.
 5. **cert-manager**: install the chart, then apply the [`ClusterIssuer`](cert-manager/cluster-issuer.yaml). Other add-ons reference it via `cert-manager.io/cluster-issuer` annotations.
 6. **argocd**, **kube-prometheus-stack**: expose Ingress hosts (depend on 3-5 for DNS + TLS).
-7. **victorialogs**: a single StatefulSet on a `gp3` volume (depends on 1). No IRSA role, no buckets.
+7. **victorialogs**: a single StatefulSet on a `gp3` volume (depends on 1). No IRSA role, no buckets. Installed by the same `observability` toggle as kube-prometheus-stack.
 8. **tetragon**: Cilium clusters only; ships ServiceMonitors scraped by Prometheus (install after monitoring).
-9. **KEDA** installs into the `monitoring` namespace (shared with Prometheus when that is selected).
+9. **KEDA** installs into the `monitoring` namespace (shared with Prometheus when the observability stack is selected).
 10. **trivy-operator**, then **kyverno**: Trivy is first because the namespace-name policy would reject `trivy-system`. Kyverno is last among namespace-creating installs. Its [policies](../kyverno-policies/) enforce namespace naming and block deletions in protected namespaces. The same `init.sh` then installs Policy Reporter into the existing `kyverno` namespace (a new namespace would be rejected), where the PolicyReport CRDs it needs already exist.
-11. **opentelemetry-demo**: Cilium workflow only, after Prometheus and VictoriaLogs, and before Kyverno. The namespace-name policy would reject `otel-demo`. Selecting it creates the node group as `m6g.xlarge`.
+11. **opentelemetry-demo**: Cilium workflow only, after the observability stack (Prometheus and VictoriaLogs), and before Kyverno. The namespace-name policy would reject `otel-demo`. Selecting it creates the node group as `m6g.xlarge`.
 
 Add-on charts that expose metrics ship a ServiceMonitor (`ingress-nginx`,
 `external-dns`, `cert-manager`, `argo-cd`, Cilium/Hubble, EBS CSI,

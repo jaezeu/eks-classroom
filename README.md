@@ -140,6 +140,9 @@ Use the workflows in `.github/workflows` to create and destroy clusters:
 - `cleanup.yml` - tears down everything the cluster workflows created
 
 Each add-on is its own toggle on the create workflows; pick them one by one.
+The exception is the **observability** toggle, which installs Prometheus,
+Grafana, Alertmanager, VictoriaLogs and Vector together: Grafana ships the
+VictoriaLogs datasource and dashboards, so neither half is useful alone.
 Two are not toggles and always install first: the EBS CSI driver (default
 `gp3` StorageClass) and Metrics Server (`kubectl top`, HPA), so a workload
 that needs a volume or the metrics API never needs a redeploy. The

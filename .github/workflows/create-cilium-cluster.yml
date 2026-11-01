@@ -33,19 +33,14 @@ on:
         description: "Deploy ArgoCD?"
         default: false
         required: true
-      monitoring:
+      observability:
         type: boolean
-        description: "Deploy Prometheus and Grafana?"
+        description: "Deploy observability stack (Prometheus, Grafana, Alertmanager, VictoriaLogs, Vector)?"
         default: false
         required: true
       keda:
         type: boolean
         description: "Deploy KEDA?"
-        default: false
-        required: true
-      logging:
-        type: boolean
-        description: "Deploy VictoriaLogs?"
         default: false
         required: true
       tetragon:
@@ -65,7 +60,7 @@ on:
         required: true
       opentelemetry-demo:
         type: boolean
-        description: "Deploy the OpenTelemetry demo? Needs Prometheus and VictoriaLogs. Uses m6g.xlarge nodes."
+        description: "Deploy the OpenTelemetry demo? Needs the observability stack. Uses m6g.xlarge nodes."
         default: false
         required: true
   # Mirrors the dispatch inputs so the rehearsal workflow can call this
@@ -88,13 +83,10 @@ on:
       argocd:
         type: boolean
         default: false
-      monitoring:
+      observability:
         type: boolean
         default: false
       keda:
-        type: boolean
-        default: false
-      logging:
         type: boolean
         default: false
       tetragon:
@@ -299,17 +291,20 @@ jobs:
           ./init.sh gateway-values.yaml
           kubectl apply -f gateway-route.yaml
 
+      # Observability stack, part 1: Prometheus, Grafana, Alertmanager.
       - name: Deploy Prometheus and Grafana
-        if: ${{ inputs.monitoring }}
+        if: ${{ inputs.observability }}
         working-directory: addons/kube-prometheus-stack
         run: |
           ./init.sh gateway-values.yaml
           kubectl apply -f gateway-route.yaml
 
-      # VictoriaLogs stores logs on a gp3 volume, so it needs the EBS CSI
-      # driver installed above and nothing from Terraform.
+      # Observability stack, part 2: VictoriaLogs and Vector. Grafana's
+      # VictoriaLogs datasource and dashboards are set up by the chart above,
+      # so the two always ship together. Logs live on a gp3 volume, which
+      # needs the EBS CSI driver installed above and nothing from Terraform.
       - name: Deploy VictoriaLogs
-        if: ${{ inputs.logging }}
+        if: ${{ inputs.observability }}
         working-directory: addons/victorialogs
         run: ./init.sh
 
@@ -331,7 +326,7 @@ jobs:
         run: ./init.sh
 
       # Before Kyverno: the namespace-name policy would reject otel-demo.
-      # Needs Prometheus and VictoriaLogs.
+      # Needs the observability stack (Prometheus, Grafana, VictoriaLogs).
       # The deploy job uses m6g.xlarge when this option is on.
       - name: Deploy OpenTelemetry demo
         if: ${{ inputs.opentelemetry-demo }}
@@ -355,9 +350,8 @@ jobs:
       CERT_MANAGER: ${{ inputs.cert-manager }}
       STAGING_CERTS: ${{ inputs.staging-certs }}
       ARGOCD: ${{ inputs.argocd }}
-      MONITORING: ${{ inputs.monitoring }}
+      OBSERVABILITY: ${{ inputs.observability }}
       KEDA: ${{ inputs.keda }}
-      LOGGING: ${{ inputs.logging }}
       TRIVY_OPERATOR: ${{ inputs.trivy-operator }}
       KYVERNO: ${{ inputs.kyverno }}
       OTEL_DEMO: ${{ inputs.opentelemetry-demo }}
@@ -378,8 +372,8 @@ jobs:
           [ "$EXTERNAL_DNS" = "true" ] && NAMESPACES="$NAMESPACES external-dns"
           [ "$CERT_MANAGER" = "true" ] && NAMESPACES="$NAMESPACES cert-manager"
           [ "$ARGOCD" = "true" ]       && NAMESPACES="$NAMESPACES argocd"
-          { [ "$MONITORING" = "true" ] || [ "$KEDA" = "true" ]; } && NAMESPACES="$NAMESPACES monitoring"
-          [ "$LOGGING" = "true" ]      && NAMESPACES="$NAMESPACES victorialogs"
+          { [ "$OBSERVABILITY" = "true" ] || [ "$KEDA" = "true" ]; } && NAMESPACES="$NAMESPACES monitoring"
+          [ "$OBSERVABILITY" = "true" ] && NAMESPACES="$NAMESPACES victorialogs"
           [ "$TRIVY_OPERATOR" = "true" ] && NAMESPACES="$NAMESPACES trivy-system"
           [ "$KYVERNO" = "true" ]       && NAMESPACES="$NAMESPACES kyverno"
           [ "$OTEL_DEMO" = "true" ]    && NAMESPACES="$NAMESPACES otel-demo"
@@ -411,7 +405,7 @@ jobs:
           echo "OK  default StorageClass is gp3"
 
       - name: Logs reaching VictoriaLogs
-        if: ${{ inputs.logging }}
+        if: ${{ inputs.observability }}
         run: |
           kubectl port-forward -n victorialogs svc/victorialogs 9428:9428 >/dev/null 2>&1 &
           for i in {1..20}; do
@@ -444,7 +438,7 @@ jobs:
         run: |
           NAMESPACES="kube-system"
           [ "$ARGOCD" = "true" ]          && NAMESPACES="$NAMESPACES argocd"
-          [ "$MONITORING" = "true" ]      && NAMESPACES="$NAMESPACES monitoring"
+          [ "$OBSERVABILITY" = "true" ]   && NAMESPACES="$NAMESPACES monitoring"
           [ "$KYVERNO" = "true" ]         && NAMESPACES="$NAMESPACES kyverno"
           for ns in $NAMESPACES; do
             kubectl wait --for=condition=Ready certificate --all -n "$ns" --timeout=10m
@@ -456,7 +450,7 @@ jobs:
         run: |
           URLS="https://gateway-hubble.sctp-sandbox.com"
           [ "$ARGOCD" = "true" ]          && URLS="$URLS https://gateway-argocd.sctp-sandbox.com"
-          [ "$MONITORING" = "true" ]      && URLS="$URLS https://gateway-admin-prom.sctp-sandbox.com https://gateway-admin-grafana.sctp-sandbox.com"
+          [ "$OBSERVABILITY" = "true" ]   && URLS="$URLS https://gateway-admin-prom.sctp-sandbox.com https://gateway-admin-grafana.sctp-sandbox.com"
           [ "$KYVERNO" = "true" ]         && URLS="$URLS https://gateway-policy-reporter.sctp-sandbox.com"
           # Staging certificates chain to an untrusted root; -k keeps the
           # check meaningful (-f still requires a 2xx/3xx from the backend).
