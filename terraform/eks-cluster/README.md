@@ -12,11 +12,11 @@ Pick a `.tfvars` file for the mode you want:
 - `cilium-wo-nodegroup.tfvars` - Cilium mode, no node groups yet (install Cilium first)
 - `cilium-with-nodegroup.tfvars` - Cilium mode with node groups (second apply, after Cilium is in)
 
-Three boolean variables in `variables.tf` toggle optional IRSA resources, all
+One boolean variable in `variables.tf` toggles an optional IRSA resource,
 defaulting to `true`:
 
 - `enable_external_dns` - IAM role for ExternalDNS with Route53
-- `enable_loki_s3` - S3 buckets + IAM role for Loki
-- `enable_ebs_csi_driver_role` - IAM role for the EBS CSI driver
 
-Everything IRSA-related lives in `irsa.tf`.
+The EBS CSI driver role is always created: the driver is installed on every
+cluster. VictoriaLogs keeps logs on an EBS volume, so there are no log
+buckets. Everything IRSA-related lives in `irsa.tf`.

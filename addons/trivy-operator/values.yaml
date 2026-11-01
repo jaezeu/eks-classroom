@@ -6,11 +6,12 @@ serviceMonitor:
 
 # Platform namespaces are managed by the workflows, not by students; scanning
 # them only produces findings nobody here can act on.
-excludeNamespaces: "kube-system,monitoring,loki,cert-manager,external-dns,argocd,kyverno,trivy-system,gateway"
+excludeNamespaces: "kube-system,monitoring,victorialogs,cert-manager,external-dns,argocd,kyverno,trivy-system,gateway"
 
 operator:
   # Default 10. Each scan Job may use up to trivy.resources.limits.memory, so
-  # ten at once on m6g.large nodes already running Prometheus and Loki caused
+  # ten at once on m6g.large nodes already running Prometheus and Loki (now
+  # VictoriaLogs) caused
   # kubelet evictions. Two keeps the sweep moving without memory pressure.
   scanJobsConcurrentLimit: 2
   # Default is empty, which leaves failed/evicted Jobs and their pods behind.

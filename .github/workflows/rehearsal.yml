@@ -65,11 +65,9 @@ jobs:
       staging-certs: true   # rehearsal certs come from Let's Encrypt staging, off the production quota
       argocd: true
       monitoring: true
-      metrics-server: true
       keda: true
       logging: true
       tetragon: true
-      ebs-csi: true
       trivy-operator: true
       kyverno: true
     secrets: inherit
@@ -103,10 +101,8 @@ jobs:
       staging-certs: true   # rehearsal certs come from Let's Encrypt staging, off the production quota
       argocd: true
       monitoring: true
-      metrics-server: true
       keda: true
       logging: true
-      ebs-csi: true
       trivy-operator: true
       kyverno: true
     secrets: inherit

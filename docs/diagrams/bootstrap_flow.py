@@ -48,7 +48,7 @@ with Diagram(
         s_tf = Terraform("terraform apply\n(defaults)")
         s_eks = EKS("EKS + VPC + IRSA\n+ VPC CNI + kube-proxy\n+ node group")
         with Cluster("Helm add-ons (bootstrap job)"):
-            s_addons = Nginx("nginx -> external-dns ->\ncert-manager(+issuer) ->\nargocd -> kube-prometheus ->\nloki -> ebs-csi")
+            s_addons = Nginx("ebs-csi -> metrics-server ->\nnginx -> external-dns ->\ncert-manager(+issuer) ->\nargocd -> kube-prometheus ->\nvictorialogs")
 
         s_tf >> s_eks >> s_addons
 
@@ -60,7 +60,7 @@ with Diagram(
         c_cil = Custom("helm install\nCilium 1.19.3\neBPF + Hubble + GwAPI", ICON("cilium"))
         c_tf2 = Terraform("apply #2\ncilium-with-nodegroup.tfvars\n(add nodes + CoreDNS)")
         with Cluster("Helm add-ons (bootstrap job)"):
-            c_addons = Nginx("external-dns -> cert-manager ->\nargocd -> kube-prometheus ->\nloki -> tetragon -> ebs-csi")
+            c_addons = Nginx("ebs-csi -> metrics-server ->\nexternal-dns -> cert-manager ->\nargocd -> kube-prometheus ->\nvictorialogs -> tetragon")
 
         c_tf1 >> c_eks >> c_crd >> c_cil >> c_tf2 >> c_addons
 

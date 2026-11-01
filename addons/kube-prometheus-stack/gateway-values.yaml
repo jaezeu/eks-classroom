@@ -8,7 +8,7 @@ prometheus:
     # Chart ServiceMonitors (Prometheus, Alertmanager, Grafana, node-exporter,
     # kube-state-metrics, kubelet) stay at the chart defaults, which are on.
     serviceMonitorSelectorNilUsesHelmValues: false
-    # Same for PodMonitors: Vector (addons/loki) ships one instead of a ServiceMonitor.
+    # Same for PodMonitors: Vector (addons/victorialogs) ships one instead of a ServiceMonitor.
     podMonitorSelectorNilUsesHelmValues: false
     # Cart Service Exemplars reads exemplars from the OTLP ingest.
     enableFeatures:
@@ -45,22 +45,20 @@ grafana:
     server:
       root_url: https://gateway-admin-grafana.sctp-sandbox.com
   # Ingress stays open so the Cilium gateway and probes can reach the UI.
-  # Egress is DNS plus Prometheus, Alertmanager, the Loki gateway, Jaeger,
-  # and 443 for the dashboard download.
+  # Egress is DNS plus Prometheus, Alertmanager, VictoriaLogs, Jaeger, and
+  # 443 for the dashboard and plugin downloads.
   networkPolicy:
     enabled: true
     egress:
       enabled: true
       ports:
-        - port: 80
-          protocol: TCP
         - port: 443
-          protocol: TCP
-        - port: 8080
           protocol: TCP
         - port: 9090
           protocol: TCP
         - port: 9093
+          protocol: TCP
+        - port: 9428
           protocol: TCP
         - port: 16686
           protocol: TCP
@@ -114,8 +112,8 @@ prometheusOperator:
 alertmanager:
   networkPolicy:
     enabled: true
-    # No source selector: probes, Grafana, the Loki ruler, and the Cilium
-    # gateway can all reach the UI and the reloader metrics port.
+    # No source selector: probes, Grafana, and the Cilium gateway can all
+    # reach the UI and the reloader metrics port.
     additionalIngress:
       - ports:
           - port: 9093

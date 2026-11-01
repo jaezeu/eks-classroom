@@ -48,7 +48,6 @@ policies and example manifests used in lessons.
   - VPC and networking resources
   - IAM roles and policies
   - EC2 instances (for node groups)
-  - S3 buckets (for Loki, if enabled)
   - Route53 records (for ExternalDNS, if enabled)
 - **AWS CLI configured** with a named profile or default credentials:
   ```bash
@@ -119,7 +118,7 @@ example walks through the same pattern side by side with its classic
 |-----------|------------|
 | [terraform/eks-cluster/](terraform/eks-cluster/) | The cluster itself: VPC, EKS, node groups, IRSA roles. `.tfvars` files select standard vs Cilium mode. |
 | [terraform/eks-cluster-deployer-role/](terraform/eks-cluster-deployer-role/) | Bootstrap step: the IAM role (GitHub OIDC) that the workflows assume. Run once, first. |
-| [addons/](addons/) | One directory per Helm add-on (argocd, cert-manager, cilium, ebs-csi-driver, keda, kube-prometheus-stack, kyverno (with Policy Reporter), loki, metrics-server, nginx-ingress, opentelemetry-demo, r53-externaldns, trivy-operator). Each has its values file(s) and an `init.sh`. |
+| [addons/](addons/) | One directory per Helm add-on (argocd, cert-manager, cilium, ebs-csi-driver, keda, kube-prometheus-stack, kyverno (with Policy Reporter), metrics-server, nginx-ingress, opentelemetry-demo, r53-externaldns, trivy-operator, victorialogs). Each has its values file(s) and an `init.sh`. |
 | [kyverno-policies/](kyverno-policies/) | The guardrail admission policies that `addons/kyverno` enforces. `gateway-api/` subfolder applies only on Cilium clusters. |
 | [deployment-manifests-examples/](deployment-manifests-examples/) | Plain-manifest teaching examples. `ingress-coaching/` targets the standard cluster, `gateway-api-coaching/` the Cilium one. |
 | [scripts/](scripts/) | Learner namespace provisioning and the add-on render/validation check CI uses. |
@@ -141,12 +140,15 @@ Use the workflows in `.github/workflows` to create and destroy clusters:
 - `cleanup.yml` - tears down everything the cluster workflows created
 
 Each add-on is its own toggle on the create workflows; pick them one by one.
-The OpenTelemetry demo is a Cilium-only option; selecting it creates
-`m6g.xlarge` nodes.
+Two are not toggles and always install first: the EBS CSI driver (default
+`gp3` StorageClass) and Metrics Server (`kubectl top`, HPA), so a workload
+that needs a volume or the metrics API never needs a redeploy. The
+OpenTelemetry demo is a Cilium-only option; selecting it creates `m6g.xlarge`
+nodes.
 
-Every cluster workflow ends with a **verify job** (workload rollouts, logs
-reaching Loki, policies, TLS certs, live
-HTTPS checks). Cleanup **sweeps orphans** that terraform can't
+Every cluster workflow ends with a **verify job** (workload rollouts, metrics
+API and default StorageClass, logs reaching VictoriaLogs, policies, TLS
+certs, live HTTPS checks). Cleanup **sweeps orphans** that terraform can't
 see (load balancers by cluster tag, DNS records by external-dns ownership)
 before `terraform destroy` removes the rest. A
 [monthly rehearsal](.github/workflows/rehearsal.yml) rebuilds both clusters
@@ -155,8 +157,8 @@ works - and skips itself whenever a live cluster is up.
 
 > [!NOTE]
 > **The deployer role uses `AdministratorAccess`.** This is a deliberate
-> tradeoff for a sandbox teaching account: the workflows create IAM roles, VPCs,
-> EKS clusters and S3 buckets, and keeping the policy broad avoids
+> tradeoff for a sandbox teaching account: the workflows create IAM roles, VPCs
+> and EKS clusters, and keeping the policy broad avoids
 > permission-debugging during lessons. Do **not** copy this pattern to a
 > production account; scope the role down to the specific services Terraform
 > manages there.

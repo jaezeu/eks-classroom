@@ -1,0 +1,174 @@
+# Vector 0.60 (chart 0.60.0) as the per-node log shipper. One DaemonSet pod
+# per node tails /var/log/pods and pushes to VictoriaLogs in this namespace
+# through its Elasticsearch bulk endpoint, the ingestion path the VictoriaLogs
+# docs give for Vector.
+#
+# Field model (what students see in Grafana and vmui): _msg is the raw
+# container line, _time is the CRI timestamp, and every line carries
+# namespace, pod, container, node, stream, app, instance, component, job and
+# image. namespace, app, pod, container and stream are the stream fields
+# ({...} filters); the rest are ordinary fields (field:value filters).
+#
+# The chart passes customConfig through Helm tpl. Vector's own {{ field }}
+# templates would therefore need escaping; none are used below.
+role: Agent
+
+# The chart labels its pods vector.dev/exclude=true and the kubernetes_logs
+# source skips such pods. Flip it so Vector's own logs reach VictoriaLogs
+# (the Vector board shows them).
+podLabels:
+  vector.dev/exclude: "false"
+
+# JSON logs so the board can split Vector's own logs by level with unpack_json.
+env:
+  - name: VECTOR_LOG_FORMAT
+    value: json
+
+# Teaching clusters run m6g.large nodes that are already busy with Prometheus,
+# so a memory limit keeps a backlog from evicting neighbours.
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+# Scraped by pod IP on the port the chart derives from the prom_exporter sink
+# (container port prom-exporter, which is the chart default here).
+# kube-prometheus-stack picks it up with podMonitorSelectorNilUsesHelmValues: false.
+podMonitor:
+  enabled: true
+
+# Nothing dials Vector: the API listens on localhost and metrics are scraped
+# through the PodMonitor, so the chart Services are left out.
+service:
+  enabled: false
+serviceHeadless:
+  enabled: false
+
+# The chart has no network-policy switch, so this is an extra manifest.
+# Egress: VictoriaLogs on 9428 (the push), CoreDNS, and 443 with no CIDR for
+# the EKS API (kubernetes_logs watches pods, namespaces and nodes; log files
+# are read from the node's filesystem, not over the kubelet port).
+# Ingress: the Prometheus scrape of the exporter port from monitoring.
+extraObjects:
+  - apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: vector
+      namespace: victorialogs
+    spec:
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: vector
+          app.kubernetes.io/instance: vector
+      policyTypes:
+        - Ingress
+        - Egress
+      ingress:
+        - from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: monitoring
+          ports:
+            - port: 9090
+              protocol: TCP
+      egress:
+        - to:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: victoria-logs-single
+                  app.kubernetes.io/instance: victorialogs
+          ports:
+            - port: 9428
+              protocol: TCP
+        - to:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: kube-system
+          ports:
+            - port: 53
+              protocol: UDP
+            - port: 53
+              protocol: TCP
+        - ports:
+            - port: 443
+              protocol: TCP
+
+customConfig:
+  # The chart mounts the node's /var/lib/vector here; kubernetes_logs keeps
+  # its file checkpoints in it.
+  data_dir: /vector-data-dir
+  api:
+    enabled: true
+    address: 127.0.0.1:8686
+  sources:
+    kubernetes_logs:
+      type: kubernetes_logs
+    internal_metrics:
+      type: internal_metrics
+  transforms:
+    # Flatten the kubernetes_logs metadata into the fields listed at the top
+    # of this file. app falls back from the standard name label to the app
+    # label, the owning controller (ReplicaSet hash stripped) and finally the
+    # pod name, so job = namespace/app is set for every pod. The nested
+    # kubernetes object, file path and source type are dropped so each stored
+    # line is just the message plus these fields.
+    fields:
+      type: remap
+      inputs:
+        - kubernetes_logs
+      source: |
+        .namespace = .kubernetes.pod_namespace
+        .pod = .kubernetes.pod_name
+        .container = .kubernetes.container_name
+        .node = .kubernetes.pod_node_name
+        .image = .kubernetes.container_image
+        if exists(.kubernetes.pod_labels."app.kubernetes.io/name") {
+          .app = .kubernetes.pod_labels."app.kubernetes.io/name"
+        } else if exists(.kubernetes.pod_labels.app) {
+          .app = .kubernetes.pod_labels.app
+        } else if exists(.kubernetes.pod_owner) {
+          owner = replace(string!(.kubernetes.pod_owner), r'^[^/]+/', "")
+          .app = replace(owner, r'-[0-9a-f]{8,10}$', "")
+        } else {
+          .app = .kubernetes.pod_name
+        }
+        if exists(.kubernetes.pod_labels."app.kubernetes.io/instance") {
+          .instance = .kubernetes.pod_labels."app.kubernetes.io/instance"
+        } else if exists(.kubernetes.pod_labels.instance) {
+          .instance = .kubernetes.pod_labels.instance
+        }
+        if exists(.kubernetes.pod_labels."app.kubernetes.io/component") {
+          .component = .kubernetes.pod_labels."app.kubernetes.io/component"
+        } else if exists(.kubernetes.pod_labels.component) {
+          .component = .kubernetes.pod_labels.component
+        }
+        .job = string!(.namespace) + "/" + string!(.app)
+        del(.kubernetes)
+        del(.file)
+        del(.source_type)
+  sinks:
+    victorialogs:
+      # Elasticsearch bulk API, as the VictoriaLogs Vector docs show. The
+      # query args name the message and time fields and the stream fields;
+      # every other event field is stored as a regular log field.
+      type: elasticsearch
+      inputs:
+        - fields
+      endpoints:
+        - http://victorialogs.victorialogs.svc.cluster.local:9428/insert/elasticsearch/
+      mode: bulk
+      api_version: v8
+      compression: gzip
+      healthcheck:
+        enabled: false
+      query:
+        _msg_field: message
+        _time_field: timestamp
+        _stream_fields: namespace,app,pod,container,stream
+    prom_exporter:
+      type: prometheus_exporter
+      inputs:
+        - internal_metrics
+      address: 0.0.0.0:9090

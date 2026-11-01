@@ -43,11 +43,6 @@ on:
         description: "Deploy Prometheus and Grafana?"
         default: false
         required: true
-      metrics-server:
-        type: boolean
-        description: "Deploy Metrics Server?"
-        default: false
-        required: true
       keda:
         type: boolean
         description: "Deploy KEDA?"
@@ -55,12 +50,7 @@ on:
         required: true
       logging:
         type: boolean
-        description: "Deploy Loki?"
-        default: false
-        required: true
-      ebs-csi:
-        type: boolean
-        description: "Deploy EBS CSI Resources?"
+        description: "Deploy VictoriaLogs?"
         default: false
         required: true
       trivy-operator:
@@ -99,16 +89,10 @@ on:
       monitoring:
         type: boolean
         default: false
-      metrics-server:
-        type: boolean
-        default: false
       keda:
         type: boolean
         default: false
       logging:
-        type: boolean
-        default: false
-      ebs-csi:
         type: boolean
         default: false
       trivy-operator:
@@ -136,9 +120,6 @@ jobs:
     outputs:
       cluster_name: ${{ steps.deploy_steps.outputs.CLUSTER_NAME }}
       external_dns_role_arn: ${{ steps.deploy_steps.outputs.EXTERNAL_DNS_ROLE_ARN }}
-      loki_s3_role_arn: ${{ steps.deploy_steps.outputs.LOKI_S3_ROLE_ARN }}
-      loki_chunks_bucket: ${{ steps.deploy_steps.outputs.LOKI_CHUNKS_BUCKET }}
-      loki_ruler_bucket: ${{ steps.deploy_steps.outputs.LOKI_RULER_BUCKET }}
       ebs_csi_role_arn: ${{ steps.deploy_steps.outputs.EBS_CSI_ROLE_ARN }}
 
     steps:
@@ -176,10 +157,7 @@ jobs:
           {
             echo "CLUSTER_NAME=$(terraform output -raw cluster_name)"
             echo "EXTERNAL_DNS_ROLE_ARN=$(terraform output -json external_dns_role_arn | jq -r '.[0]')"
-            echo "LOKI_S3_ROLE_ARN=$(terraform output -json loki_s3_role_arn | jq -r '.[0]')"
-            echo "LOKI_CHUNKS_BUCKET=$(terraform output -json loki_chunks_bucket_name | jq -r '.[0]')"
-            echo "LOKI_RULER_BUCKET=$(terraform output -json loki_ruler_bucket_name | jq -r '.[0]')"
-            echo "EBS_CSI_ROLE_ARN=$(terraform output -json ebs_csi_driver_role_arn | jq -r '.[0]')"
+            echo "EBS_CSI_ROLE_ARN=$(terraform output -raw ebs_csi_driver_role_arn)"
           } >> "$GITHUB_OUTPUT"
         working-directory: ./terraform/eks-cluster
 
@@ -210,6 +188,25 @@ jobs:
       # (or without) kube-prometheus-stack. Apply its CRDs once, up front.
       - name: Install Prometheus Operator CRDs
         run: ./addons/kube-prometheus-stack/install-crds.sh
+
+      # Baseline add-ons with no toggle: a cluster without a StorageClass or the
+      # metrics API only looks broken to a learner. Both go first so anything
+      # later can claim a volume. The EBS CSI chart renders a ServiceMonitor,
+      # so the Prometheus Operator CRDs must already exist.
+      - name: Deploy EBS CSI Driver
+        working-directory: addons/ebs-csi-driver
+        env:
+          EBS_CSI_ROLE_ARN: ${{ needs.deploy.outputs.ebs_csi_role_arn }}
+        run: |
+          # shellcheck disable=SC2016  # literal ${VAR} names are envsubst syntax, not shell
+          envsubst '${EBS_CSI_ROLE_ARN}' < values.yaml > updated-values.yaml
+          mv updated-values.yaml values.yaml
+          ./init.sh
+
+      # kube-system already exists, so the namespace-name policy does not apply.
+      - name: Deploy Metrics Server
+        working-directory: addons/metrics-server
+        run: ./init.sh
 
       - name: Deploy Nginx Ingress Controller
         if: ${{ inputs.nginx-ingress }}
@@ -247,35 +244,11 @@ jobs:
         working-directory: addons/kube-prometheus-stack
         run: ./init.sh
 
-      - name: Deploy Loki
+      # VictoriaLogs stores logs on a gp3 volume, so it needs the EBS CSI
+      # driver installed above and nothing from Terraform.
+      - name: Deploy VictoriaLogs
         if: ${{ inputs.logging }}
-        working-directory: addons/loki
-        env:
-          REGION: ${{ inputs.region }}
-          LOKI_S3_ROLE_ARN: ${{ needs.deploy.outputs.loki_s3_role_arn }}
-          LOKI_CHUNKS_BUCKET: ${{ needs.deploy.outputs.loki_chunks_bucket }}
-          LOKI_RULER_BUCKET: ${{ needs.deploy.outputs.loki_ruler_bucket }}
-        run: |
-          # shellcheck disable=SC2016  # literal ${VAR} names are envsubst syntax, not shell
-          envsubst '${REGION} ${LOKI_S3_ROLE_ARN} ${LOKI_CHUNKS_BUCKET} ${LOKI_RULER_BUCKET}' < loki-values.yaml > updated-values.yaml
-          mv updated-values.yaml loki-values.yaml
-          ./init.sh
-
-      - name: Deploy EBS CSI Driver Resources
-        if: ${{ inputs.ebs-csi }}
-        working-directory: addons/ebs-csi-driver
-        env:
-          EBS_CSI_ROLE_ARN: ${{ needs.deploy.outputs.ebs_csi_role_arn }}
-        run: |
-          # shellcheck disable=SC2016  # literal ${VAR} names are envsubst syntax, not shell
-          envsubst '${EBS_CSI_ROLE_ARN}' < values.yaml > updated-values.yaml
-          mv updated-values.yaml values.yaml
-          ./init.sh
-
-      # kube-system already exists, so the namespace-name policy does not apply.
-      - name: Deploy Metrics Server
-        if: ${{ inputs.metrics-server }}
-        working-directory: addons/metrics-server
+        working-directory: addons/victorialogs
         run: ./init.sh
 
       # Installs into monitoring (shared with Prometheus when that is on).
@@ -332,7 +305,7 @@ jobs:
           [ "$CERT_MANAGER" = "true" ]  && NAMESPACES="$NAMESPACES cert-manager"
           [ "$ARGOCD" = "true" ]        && NAMESPACES="$NAMESPACES argocd"
           { [ "$MONITORING" = "true" ] || [ "$KEDA" = "true" ]; } && NAMESPACES="$NAMESPACES monitoring"
-          [ "$LOGGING" = "true" ]       && NAMESPACES="$NAMESPACES loki"
+          [ "$LOGGING" = "true" ]       && NAMESPACES="$NAMESPACES victorialogs"
           [ "$TRIVY_OPERATOR" = "true" ] && NAMESPACES="$NAMESPACES trivy-system"
           [ "$KYVERNO" = "true" ]       && NAMESPACES="$NAMESPACES kyverno"
           for ns in $NAMESPACES; do
@@ -344,28 +317,44 @@ jobs:
             done
           done
 
-      # Rollout status only proves readiness. The next two steps prove the
-      # pipelines carry data: Vector must have shipped kube-system lines into
-      # Loki, and every Prometheus scrape target must be up. Both go through a
-      # port-forward; the runner is outside the cluster.
-      - name: Logs reaching Loki
-        if: ${{ inputs.logging }}
+      # Rollout status only proves readiness. The next steps prove the
+      # platform carries data: the metrics API answers and a default
+      # StorageClass exists, Vector must have shipped kube-system lines into
+      # VictoriaLogs, and every Prometheus scrape target must be up. The log
+      # check goes through a port-forward; the runner is outside the cluster.
+      - name: Metrics API and default StorageClass
         run: |
-          kubectl port-forward -n loki svc/loki-gateway 3100:80 >/dev/null 2>&1 &
-          for i in {1..20}; do
-            LINES=$(curl -sG http://127.0.0.1:3100/loki/api/v1/query \
-              --data-urlencode 'query=sum(count_over_time({namespace="kube-system"}[5m]))' \
-              | jq -r '.data.result[0].value[1] // "0"' 2>/dev/null || echo 0)
-            if [ "${LINES%.*}" -gt 0 ] 2>/dev/null; then
-              echo "OK  $LINES kube-system log lines in Loki over the last 5m"
-              curl -sG http://127.0.0.1:3100/loki/api/v1/labels | jq -c '.data'
-              exit 0
-            fi
-            echo "waiting for kube-system logs in Loki ($i/20)"
+          for i in {1..12}; do
+            if kubectl top nodes; then break; fi
+            [ "$i" -eq 12 ] && { echo "metrics API did not answer in 3 minutes"; exit 1; }
+            echo "waiting for the metrics API ($i/12)"
             sleep 15
           done
-          echo "no kube-system logs reached Loki in 5 minutes"
-          kubectl logs -n loki -l app.kubernetes.io/name=vector --tail=20 || true
+          DEFAULT_SC=$(kubectl get storageclass -o json \
+            | jq -r '[.items[] | select(.metadata.annotations["storageclass.kubernetes.io/is-default-class"] == "true") | .metadata.name] | join(" ")')
+          [ "$DEFAULT_SC" = "gp3" ] || { echo "expected gp3 as the only default StorageClass, got: '$DEFAULT_SC'"; exit 1; }
+          echo "OK  default StorageClass is gp3"
+
+      - name: Logs reaching VictoriaLogs
+        if: ${{ inputs.logging }}
+        run: |
+          kubectl port-forward -n victorialogs svc/victorialogs 9428:9428 >/dev/null 2>&1 &
+          for i in {1..20}; do
+            LINES=$(curl -sG http://127.0.0.1:9428/select/logsql/stats_query \
+              --data-urlencode 'query=namespace:kube-system _time:5m | stats count() lines' \
+              | jq -r '.data.result[0].value[1] // "0"' 2>/dev/null || echo 0)
+            if [ "${LINES%.*}" -gt 0 ] 2>/dev/null; then
+              echo "OK  $LINES kube-system log lines in VictoriaLogs over the last 5m"
+              curl -sG http://127.0.0.1:9428/select/logsql/stream_field_names \
+                --data-urlencode 'query=_time:5m' | jq -c '[.values[].value]' || true
+              exit 0
+            fi
+            echo "waiting for kube-system logs in VictoriaLogs ($i/20)"
+            sleep 15
+          done
+          echo "no kube-system logs reached VictoriaLogs in 5 minutes"
+          kubectl logs -n victorialogs -l app.kubernetes.io/name=vector --tail=20 || true
+          kubectl logs -n victorialogs victorialogs-0 --tail=20 || true
           exit 1
 
       - name: Kyverno guardrail policies ready
