@@ -19,9 +19,10 @@
 #
 # datasourceRewrites is not a chart setting. It only holds YAML anchors for the
 # placeholder substitutions the download script applies. Prometheus is the
-# datasource kube-prometheus-stack provisions (uid prometheus). Loki is added
-# below (uid loki) for panels that query logs. The Loki and Vector boards
-# are local JSON, already pointed at those uids, so they are not downloaded.
+# datasource kube-prometheus-stack provisions (uid prometheus). VictoriaLogs
+# is added below (uid victorialogs) for panels that query logs. The
+# VictoriaLogs and Vector boards are local JSON, already pointed at those
+# uids, so they are not downloaded.
 
 datasourceRewrites:
   prometheusInput: &dsPrometheus
@@ -70,14 +71,22 @@ prometheus:
         - postgresql.index.name
 
 grafana:
+  # The VictoriaLogs datasource is a plugin from the Grafana catalog. The
+  # chart installs it when the pod starts (same outbound 443 as the dashboard
+  # download), unpinned so Renovate has nothing to track here.
+  plugins:
+    - victoriametrics-logs-datasource
+
   additionalDataSources:
-    - name: Loki
-      type: loki
-      uid: loki
+    - name: VictoriaLogs
+      type: victoriametrics-logs-datasource
+      uid: victorialogs
       access: proxy
       isDefault: false
       editable: false
-      url: http://loki-gateway.loki.svc.cluster.local
+      url: http://victorialogs.victorialogs.svc.cluster.local:9428
+      jsonData:
+        maxLines: 1000
 
   sidecar:
     dashboards:
@@ -155,12 +164,11 @@ grafana:
         gnetId: 23951
         revision: 1
         datasource: *dsPrometheus
-      # Loki and Vector are not listed here. init.sh mounts
-      # dashboards/loki-logs.json and dashboards/vector.json with --set-file.
-      # The upstream Loki boards select a cluster label and a shared job that
-      # this install does not have, and the public Vector boards carry node
-      # panels and a hard-coded datasource, so local JSON is what Grafana
-      # provisions.
+      # VictoriaLogs and Vector are not listed here. init.sh mounts
+      # dashboards/victorialogs-logs.json and dashboards/vector.json with
+      # --set-file. The logs board is a per-namespace log browser in LogsQL,
+      # and the public Vector boards carry node panels and a hard-coded
+      # datasource, so local JSON is what Grafana provisions.
       # The OpenTelemetry demo boards are sidecar ConfigMaps from that add-on.
       # Linux is Admin, the image-provider NGINX board is Network, and the
       # application boards are DevOps.

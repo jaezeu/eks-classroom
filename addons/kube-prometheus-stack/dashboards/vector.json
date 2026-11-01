@@ -2,7 +2,7 @@
   "annotations": {
     "list": []
   },
-  "description": "Vector log agents (addons/loki/vector-values.yaml): what they read from the nodes, what reaches the Loki gateway, and their own logs.",
+  "description": "Vector log agents (addons/victorialogs/vector-values.yaml): what they read from the nodes, what reaches VictoriaLogs, and their own logs.",
   "editable": true,
   "graphTooltip": 1,
   "links": [],
@@ -173,12 +173,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(vector_component_sent_events_total{job=~\"$job\", pod=~\"$pod\", component_id=\"loki\"}[$__rate_interval]))",
+          "expr": "sum(rate(vector_component_sent_events_total{job=~\"$job\", pod=~\"$pod\", component_id=\"victorialogs\"}[$__rate_interval]))",
           "legendFormat": "lines/s",
           "refId": "A"
         }
       ],
-      "title": "Lines sent to Loki / s",
+      "title": "Lines sent to VictoriaLogs / s",
       "type": "stat"
     },
     {
@@ -233,18 +233,18 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(vector_component_errors_total{job=~\"$job\", pod=~\"$pod\", component_id=\"loki\"}[$__rate_interval]))",
+          "expr": "sum(rate(vector_component_errors_total{job=~\"$job\", pod=~\"$pod\", component_id=\"victorialogs\"}[$__rate_interval]))",
           "legendFormat": "errors/s",
           "refId": "A"
         }
       ],
-      "title": "Loki sink errors / s",
+      "title": "VictoriaLogs sink errors / s",
       "type": "stat"
     },
     {
       "datasource": {
-        "type": "loki",
-        "uid": "loki"
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
       },
       "fieldConfig": {
         "defaults": {
@@ -274,11 +274,13 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "loki"
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
           },
-          "expr": "sum(count_over_time({namespace=\"loki\", container=\"vector\"} [$__range]))",
+          "editorMode": "code",
+          "expr": "{namespace=\"victorialogs\", container=\"vector\"} | stats count() lines",
           "legendFormat": "lines",
+          "queryType": "stats",
           "refId": "A"
         }
       ],
@@ -363,12 +365,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (pod) (rate(vector_component_sent_events_total{job=~\"$job\", pod=~\"$pod\", component_id=\"loki\"}[$__rate_interval]))",
+          "expr": "sum by (pod) (rate(vector_component_sent_events_total{job=~\"$job\", pod=~\"$pod\", component_id=\"victorialogs\"}[$__rate_interval]))",
           "legendFormat": "{{pod}}",
           "refId": "A"
         }
       ],
-      "title": "Lines sent to Loki per agent / s",
+      "title": "Lines sent to VictoriaLogs per agent / s",
       "type": "timeseries"
     },
     {
@@ -449,12 +451,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (pod) (rate(vector_component_sent_bytes_total{job=~\"$job\", pod=~\"$pod\", component_id=\"loki\"}[$__rate_interval]))",
+          "expr": "sum by (pod) (rate(vector_component_sent_bytes_total{job=~\"$job\", pod=~\"$pod\", component_id=\"victorialogs\"}[$__rate_interval]))",
           "legendFormat": "{{pod}}",
           "refId": "A"
         }
       ],
-      "title": "Bytes sent to Loki per agent (compressed)",
+      "title": "Bytes sent to VictoriaLogs per agent (compressed)",
       "type": "timeseries"
     },
     {
@@ -536,12 +538,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (status) (rate(vector_http_client_responses_total{job=~\"$job\", pod=~\"$pod\", component_id=\"loki\"}[$__rate_interval]))",
+          "expr": "sum by (status) (rate(vector_http_client_responses_total{job=~\"$job\", pod=~\"$pod\", component_id=\"victorialogs\"}[$__rate_interval]))",
           "legendFormat": "HTTP {{status}}",
           "refId": "A"
         }
       ],
-      "title": "Loki push responses by status",
+      "title": "VictoriaLogs push responses by status",
       "type": "timeseries"
     },
     {
@@ -581,12 +583,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "100 * sum(rate(vector_http_client_responses_total{job=~\"$job\", pod=~\"$pod\", component_id=\"loki\", status=~\"5..\"}[$__rate_interval])) / sum(rate(vector_http_client_responses_total{job=~\"$job\", pod=~\"$pod\", component_id=\"loki\"}[$__rate_interval]))",
+          "expr": "100 * sum(rate(vector_http_client_responses_total{job=~\"$job\", pod=~\"$pod\", component_id=\"victorialogs\", status=~\"5..\"}[$__rate_interval])) / sum(rate(vector_http_client_responses_total{job=~\"$job\", pod=~\"$pod\", component_id=\"victorialogs\"}[$__rate_interval]))",
           "legendFormat": "5xx",
           "refId": "A"
         }
       ],
-      "title": "Loki push 5xx rate",
+      "title": "VictoriaLogs push 5xx rate",
       "type": "timeseries"
     },
     {
@@ -624,7 +626,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(vector_http_client_rtt_seconds_bucket{job=~\"$job\", pod=~\"$pod\", component_id=\"loki\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(vector_http_client_rtt_seconds_bucket{job=~\"$job\", pod=~\"$pod\", component_id=\"victorialogs\"}[$__rate_interval])))",
           "legendFormat": "p99",
           "refId": "A"
         },
@@ -633,12 +635,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(vector_http_client_rtt_seconds_bucket{job=~\"$job\", pod=~\"$pod\", component_id=\"loki\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(vector_http_client_rtt_seconds_bucket{job=~\"$job\", pod=~\"$pod\", component_id=\"victorialogs\"}[$__rate_interval])))",
           "legendFormat": "p50",
           "refId": "B"
         }
       ],
-      "title": "Loki push round trip",
+      "title": "VictoriaLogs push round trip",
       "type": "timeseries"
     },
     {
@@ -763,12 +765,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (pod) (vector_buffer_size_events{job=~\"$job\", pod=~\"$pod\", component_id=\"loki\"})",
+          "expr": "sum by (pod) (vector_buffer_size_events{job=~\"$job\", pod=~\"$pod\", component_id=\"victorialogs\"})",
           "legendFormat": "{{pod}}",
           "refId": "A"
         }
       ],
-      "title": "Loki sink buffer (events)",
+      "title": "VictoriaLogs sink buffer (events)",
       "type": "timeseries"
     },
     {
@@ -808,18 +810,18 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "avg by (pod) (vector_utilization{job=~\"$job\", pod=~\"$pod\", component_id=\"loki\"})",
+          "expr": "avg by (pod) (vector_utilization{job=~\"$job\", pod=~\"$pod\", component_id=\"victorialogs\"})",
           "legendFormat": "{{pod}}",
           "refId": "A"
         }
       ],
-      "title": "Loki sink utilization",
+      "title": "VictoriaLogs sink utilization",
       "type": "timeseries"
     },
     {
       "datasource": {
-        "type": "loki",
-        "uid": "loki"
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
       },
       "fieldConfig": {
         "defaults": {
@@ -901,11 +903,13 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "loki"
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
           },
-          "expr": "sum by (level) (count_over_time({namespace=\"loki\", container=\"vector\"} | json | __error__=\"\" | level=~\"$level\" [$__auto]))",
+          "editorMode": "code",
+          "expr": "{namespace=\"victorialogs\", container=\"vector\"} | unpack_json fields (level) | filter level:$level | stats by (level) count() lines",
           "legendFormat": "{{level}}",
+          "queryType": "statsRange",
           "refId": "A"
         }
       ],
@@ -914,8 +918,8 @@
     },
     {
       "datasource": {
-        "type": "loki",
-        "uid": "loki"
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
       },
       "gridPos": {
         "h": 14,
@@ -937,10 +941,13 @@
       "targets": [
         {
           "datasource": {
-            "type": "loki",
-            "uid": "loki"
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
           },
-          "expr": "{namespace=\"loki\", container=\"vector\"} | json | level=~\"$level\" |= \"$filter\"",
+          "editorMode": "code",
+          "expr": "{namespace=\"victorialogs\", container=\"vector\"} $filter | unpack_json fields (level) | filter level:$level",
+          "maxLines": 1000,
+          "queryType": "instant",
           "refId": "A"
         }
       ],
@@ -993,7 +1000,6 @@
         "type": "query"
       },
       {
-        "allValue": ".*",
         "current": {
           "selected": true,
           "text": [
@@ -1040,19 +1046,20 @@
       {
         "current": {
           "selected": false,
-          "text": "",
-          "value": ""
+          "text": "*",
+          "value": "*"
         },
+        "description": "LogsQL word or phrase filter on the message. * matches every line.",
         "label": "Filter",
         "name": "filter",
         "options": [
           {
             "selected": true,
-            "text": "",
-            "value": ""
+            "text": "*",
+            "value": "*"
           }
         ],
-        "query": "",
+        "query": "*",
         "type": "textbox"
       }
     ]

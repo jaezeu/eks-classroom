@@ -1,0 +1,73 @@
+# victoria-logs-single 0.13.10 (VictoriaLogs v1.53.0).
+#
+# A single StatefulSet replaces the distributed Loki install (distributor,
+# ingester, querier, query frontend, query scheduler, index gateway,
+# compactor, ruler, gateway, canary, memcached). Logs live on a gp3 volume
+# from the EBS CSI driver, so there is no S3 bucket and no IRSA role.
+#
+# Ingest: Vector (vector-values.yaml) pushes through the Elasticsearch bulk
+# API; the OpenTelemetry demo pushes OTLP logs. Query: Grafana through the
+# victoriametrics-logs-datasource plugin, or the built-in UI at
+# http://victorialogs.victorialogs.svc.cluster.local:9428/select/vmui/ via
+# port-forward. There is no ruler; log alerts would come from vmalert.
+
+server:
+  # Service, StatefulSet and PVC are all named victorialogs, so the in-cluster
+  # address is victorialogs.victorialogs.svc.cluster.local:9428.
+  fullnameOverride: victorialogs
+
+  # Sandbox clusters are torn down daily.
+  retentionPeriod: 1d
+
+  persistentVolume:
+    enabled: true
+    storageClassName: gp3
+    size: 10Gi
+
+  # Teaching clusters run m6g.large nodes that are already busy with
+  # Prometheus. VictoriaLogs stays well under this at classroom volume.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+
+  # Scraped by kube-prometheus-stack (serviceMonitorSelectorNilUsesHelmValues
+  # is false there). The chart needs the Prometheus Operator CRDs, which both
+  # workflows install before the first add-on.
+  serviceMonitor:
+    enabled: true
+
+# Kubernetes NetworkPolicy on the VictoriaLogs pod (both clusters; Cilium
+# enforces it too). Ingress on 9428 is the single HTTP port for ingest,
+# queries and metrics: Vector in this namespace, Grafana and Prometheus in
+# monitoring, the OpenTelemetry collector in otel-demo. Egress is DNS only;
+# VictoriaLogs dials nothing else.
+networkPolicy:
+  enabled: true
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vector
+              app.kubernetes.io/instance: vector
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: otel-demo
+      ports:
+        - port: 9428
+          protocol: TCP
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP

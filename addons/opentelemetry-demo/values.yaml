@@ -4,12 +4,13 @@
 #
 # Metrics: the collector pushes OTLP to kube-prometheus-stack, which has the
 # OTLP receiver and the resource attributes the demo dashboards promote.
-# Logs: otlp_http to the Loki gateway. Loki already allows structured metadata.
+# Logs: otlp_http to the VictoriaLogs OTLP endpoint. Resource attributes
+# become stream fields; the log body is the message.
 # Traces: the chart Jaeger. Helm replaces extraEnv as a list, so the chart
 # entries are copied and PROMETHEUS_ADDR points at the in-cluster Prometheus.
 #
-# Install after Prometheus and Loki, and before Kyverno. The namespace-name
-# policy rejects otel-demo.
+# Install after Prometheus and VictoriaLogs, and before Kyverno. The
+# namespace-name policy rejects otel-demo.
 # Network policy is networkpolicy.yaml, applied by init.sh. The chart
 # switches cannot name the EKS API or kubelet.
 
@@ -47,8 +48,10 @@ opentelemetry-collector:
         endpoint: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/otlp
         tls:
           insecure: true
-      otlp_http/loki:
-        endpoint: http://loki-gateway.loki.svc.cluster.local/otlp
+      # VictoriaLogs takes the full logs path, so logs_endpoint instead of
+      # endpoint (which would append /v1/logs itself).
+      otlp_http/victorialogs:
+        logs_endpoint: http://victorialogs.victorialogs.svc.cluster.local:9428/insert/opentelemetry/v1/logs
         tls:
           insecure: true
     service:
@@ -59,5 +62,5 @@ opentelemetry-collector:
             - debug
         logs:
           exporters:
-            - otlp_http/loki
+            - otlp_http/victorialogs
             - debug

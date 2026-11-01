@@ -21,9 +21,6 @@ export REGION="ap-southeast-1"
 export CLUSTER_NAME="dummy-cluster"
 export EXTERNAL_DNS_ROLE_ARN="arn:aws:iam::111111111111:role/dummy"
 export EBS_CSI_ROLE_ARN="arn:aws:iam::111111111111:role/dummy"
-export LOKI_S3_ROLE_ARN="arn:aws:iam::111111111111:role/dummy"
-export LOKI_CHUNKS_BUCKET="dummy-chunks"
-export LOKI_RULER_BUCKET="dummy-ruler"
 export EMAIL="dummy@example.com"
 export ACME_SERVER="https://acme-staging-v02.api.letsencrypt.org/directory"
 
@@ -110,7 +107,7 @@ ADDONS=(
   kyverno
   metrics-server
   keda
-  loki
+  victorialogs
   opentelemetry-demo
   nginx-ingress
   r53-externaldns

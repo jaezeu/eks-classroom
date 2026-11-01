@@ -22,26 +22,6 @@ output "external_dns_role_arn" {
   value = module.external_dns_role[*].arn
 }
 
-output "loki_s3_role_arn" {
-  value = module.loki_s3_role[*].arn
-}
-
-output "loki_chunks_bucket_arn" {
-  value = aws_s3_bucket.loki_chunks[*].arn
-}
-
-output "loki_ruler_bucket_arn" {
-  value = aws_s3_bucket.loki_ruler[*].arn
-}
-
-output "loki_chunks_bucket_name" {
-  value = aws_s3_bucket.loki_chunks[*].id
-}
-
-output "loki_ruler_bucket_name" {
-  value = aws_s3_bucket.loki_ruler[*].id
-}
-
 output "ebs_csi_driver_role_arn" {
-  value = module.ebs_csi_driver_role[*].arn
+  value = module.ebs_csi_driver_role.arn
 }

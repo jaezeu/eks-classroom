@@ -1,6 +1,8 @@
 # Grafana sidecar objects for the OpenTelemetry demo.
 # Dashboard JSON contains Grafana variables. Do not envsubst this file.
-# OpenSearch panels are omitted. Log panels on the demo board are LogQL.
+# OpenSearch panels are omitted; the demo board keeps no log panels. Jaeger
+# links traces to VictoriaLogs through a LogsQL query on the trace_id field
+# that the OTLP ingest stores (trace-to-logs needs Grafana 12.2 or newer).
 # Each dashboard ConfigMap is one Grafana folder: Linux in Admin, NGINX in
 # Network, and the application boards in DevOps.
 apiVersion: v1
@@ -23,11 +25,11 @@ data:
         editable: false
         jsonData:
           tracesToLogsV2:
-            datasourceUid: loki
+            datasourceUid: victorialogs
             spanStartTimeShift: "-20m"
             spanEndTimeShift: "20m"
-            filterByTraceID: true
-            filterBySpanID: true
+            customQuery: true
+            query: 'trace_id:="${__trace.traceId}"'
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -5563,7 +5565,7 @@ data:
       "uid": "W2gX2zHVk",
       "version": 2,
       "weekStart": "",
-      "description": "Shop metrics from Prometheus OTLP ingest, logs in Loki, traces in Jaeger."
+      "description": "Shop metrics from Prometheus OTLP ingest, logs in VictoriaLogs, traces in Jaeger."
     }
   apm.json: |
     {
@@ -5589,7 +5591,7 @@ data:
           }
         ]
       },
-      "description": "APM dashboard for monitoring OpenTelemetry-based services.  \n\nInstrument your applications using OpenTelemetry SDKs and send traces, metrics, and logs to Jaeger for traces, Prometheus for metrics, and Loki for logs. This dashboard provides a centralized view of your application's health and performance. ",
+      "description": "APM dashboard for monitoring OpenTelemetry-based services.  \n\nInstrument your applications using OpenTelemetry SDKs and send traces, metrics, and logs to Jaeger for traces, Prometheus for metrics, and VictoriaLogs for logs. This dashboard provides a centralized view of your application's health and performance. ",
       "editable": true,
       "fiscalYearStartMonth": 0,
       "graphTooltip": 1,

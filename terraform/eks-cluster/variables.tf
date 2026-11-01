@@ -12,20 +12,6 @@ variable "external_dns_hosted_zone_arns" {
   default     = ["arn:aws:route53:::hostedzone/Z00541411T1NGPV97B5C0"] # sctp-sandbox.com
 }
 
-# Set to true if you're making use of Loki with a s3 backend
-variable "enable_loki_s3" {
-  description = "Set to true to create IAM role and policies for Loki with a s3 backend"
-  type        = bool
-  default     = true
-}
-
-# Set to true if you're making use of a PersistentVolume with EBS CSI Driver Add-ons
-variable "enable_ebs_csi_driver_role" {
-  description = "Set to true to create IAM role and policies for PersistentVolume with EBS CSI Driver Add-ons"
-  type        = bool
-  default     = true
-}
-
 
 ########## Cilium Variables ###########
 variable "deploy_node_groups" {

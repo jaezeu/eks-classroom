@@ -4,7 +4,9 @@ Helm-based add-ons installed on top of a provisioned EKS cluster. Each
 directory is self-contained: a `values.yaml` (Helm configuration) and an
 `init.sh` (adds the Helm repo and installs/upgrades the release). The
 `init.sh` scripts are invoked by the bootstrap job in the
-[cluster creation workflows](../.github/workflows), gated by per-add-on toggles.
+[cluster creation workflows](../.github/workflows), gated by per-add-on
+toggles. Two have no toggle and always install first: the EBS CSI driver and
+Metrics Server.
 
 ## Add-ons at a glance
 
@@ -15,10 +17,10 @@ directory is self-contained: a `values.yaml` (Helm configuration) and an
 | [nginx-ingress](nginx-ingress/) | `ingress-nginx` | ingress-nginx/ingress-nginx | 4.15.1 | HTTP(S) ingress |
 | [r53-externaldns](r53-externaldns/) | `external-dns` | external-dns/external-dns | 1.23.0 | Route 53 DNS automation |
 | [kube-prometheus-stack](kube-prometheus-stack/) | `monitoring` | prometheus-community/kube-prometheus-stack | 92.14.1 | Prometheus, Grafana, Alertmanager |
-| [loki](loki/) | `loki` | grafana-community/loki (+ vector/vector 0.60.0) | 20.0.2 | Log aggregation (S3 backend); Vector ships node logs to it |
-| [opentelemetry-demo](opentelemetry-demo/) | `otel-demo` | open-telemetry/opentelemetry-demo | 0.42.6 | Astronomy shop on the Cilium workflow. Uses this Prometheus, Grafana, Loki, and Jaeger. Selects m6g.xlarge. |
-| [ebs-csi-driver](ebs-csi-driver/) | `kube-system` | aws-ebs-csi-driver | 2.67.2 | EBS volumes; default StorageClass `gp3` |
-| [metrics-server](metrics-server/) | `kube-system` | metrics-server/metrics-server | 3.14.0 | `kubectl top` and HorizontalPodAutoscaler metrics |
+| [victorialogs](victorialogs/) | `victorialogs` | victoriametrics/victoria-logs-single (+ vector/vector 0.60.0) | 0.13.10 | Log store on an EBS volume (LogsQL, built-in UI); Vector ships node logs to it |
+| [opentelemetry-demo](opentelemetry-demo/) | `otel-demo` | open-telemetry/opentelemetry-demo | 0.42.6 | Astronomy shop on the Cilium workflow. Uses this Prometheus, Grafana, VictoriaLogs, and Jaeger. Selects m6g.xlarge. |
+| [ebs-csi-driver](ebs-csi-driver/) | `kube-system` | aws-ebs-csi-driver | 2.67.2 | Always installed. EBS volumes; default StorageClass `gp3` |
+| [metrics-server](metrics-server/) | `kube-system` | metrics-server/metrics-server | 3.14.0 | Always installed. `kubectl top` and HorizontalPodAutoscaler metrics |
 | [keda](keda/) | `monitoring` | kedacore/keda | 2.21.0 | Event-driven autoscaling |
 | [kyverno](kyverno/) | `kyverno` | kyverno/kyverno | 3.9.2 | Admission controller + [guardrail policies](../kyverno-policies/) |
 | [kyverno](kyverno/) (Policy Reporter) | `kyverno` | policy-reporter/policy-reporter | 3.11.2 | Kyverno PolicyReport UI; installed by `kyverno/init.sh` |
@@ -63,20 +65,22 @@ clusters, mirroring `restrict-ingress-hosts` on standard ones.
 
 Order matters, since several add-ons consume resources created by others:
 
-1. **nginx-ingress**: provisions the load balancer other UIs are exposed through.
-2. **external-dns**: needs its [IRSA role](../terraform/eks-cluster/irsa.tf) (Route 53); publishes records for Ingress hosts.
-3. **cert-manager**: install the chart, then apply the [`ClusterIssuer`](cert-manager/cluster-issuer.yaml). Other add-ons reference it via `cert-manager.io/cluster-issuer` annotations.
-4. **argocd**, **kube-prometheus-stack**: expose Ingress hosts (depend on 1-3 for DNS + TLS).
-5. **loki**: needs its IRSA role and the two S3 buckets created by Terraform (`enable_loki_s3`).
-6. **tetragon**: Cilium clusters only; ships ServiceMonitors scraped by Prometheus (install after monitoring).
-7. **ebs-csi-driver**: needs its IRSA role. It also installs the default `gp3` StorageClass, so anything that asks for a volume can bind one.
-8. **metrics-server**: `kube-system` already exists, so the namespace-name policy does not apply. Gives `kubectl top` and the HorizontalPodAutoscaler API. **KEDA** installs into the `monitoring` namespace (shared with Prometheus when that is selected).
-9. **trivy-operator**, then **kyverno**: Trivy is first because the namespace-name policy would reject `trivy-system`. Kyverno is last among namespace-creating installs. Its [policies](../kyverno-policies/) enforce namespace naming and block deletions in protected namespaces. The same `init.sh` then installs Policy Reporter into the existing `kyverno` namespace (a new namespace would be rejected), where the PolicyReport CRDs it needs already exist.
-10. **opentelemetry-demo**: Cilium workflow only, after Prometheus and Loki, and before Kyverno. The namespace-name policy would reject `otel-demo`. Selecting it creates the node group as `m6g.xlarge`.
+1. **ebs-csi-driver** (always): needs its IRSA role. It installs the default `gp3` StorageClass, so anything later that asks for a volume can bind one. Its chart renders a ServiceMonitor, so the Prometheus Operator CRDs go in just before it.
+2. **metrics-server** (always): `kube-system` already exists, so the namespace-name policy does not apply. Gives `kubectl top` and the HorizontalPodAutoscaler API.
+3. **nginx-ingress**: provisions the load balancer other UIs are exposed through.
+4. **external-dns**: needs its [IRSA role](../terraform/eks-cluster/irsa.tf) (Route 53); publishes records for Ingress hosts.
+5. **cert-manager**: install the chart, then apply the [`ClusterIssuer`](cert-manager/cluster-issuer.yaml). Other add-ons reference it via `cert-manager.io/cluster-issuer` annotations.
+6. **argocd**, **kube-prometheus-stack**: expose Ingress hosts (depend on 3-5 for DNS + TLS).
+7. **victorialogs**: a single StatefulSet on a `gp3` volume (depends on 1). No IRSA role, no buckets.
+8. **tetragon**: Cilium clusters only; ships ServiceMonitors scraped by Prometheus (install after monitoring).
+9. **KEDA** installs into the `monitoring` namespace (shared with Prometheus when that is selected).
+10. **trivy-operator**, then **kyverno**: Trivy is first because the namespace-name policy would reject `trivy-system`. Kyverno is last among namespace-creating installs. Its [policies](../kyverno-policies/) enforce namespace naming and block deletions in protected namespaces. The same `init.sh` then installs Policy Reporter into the existing `kyverno` namespace (a new namespace would be rejected), where the PolicyReport CRDs it needs already exist.
+11. **opentelemetry-demo**: Cilium workflow only, after Prometheus and VictoriaLogs, and before Kyverno. The namespace-name policy would reject `otel-demo`. Selecting it creates the node group as `m6g.xlarge`.
 
 Add-on charts that expose metrics ship a ServiceMonitor (`ingress-nginx`,
-`external-dns`, `cert-manager`, `argo-cd`, Cilium/Hubble, EBS CSI, Loki,
-Kyverno, Metrics Server, KEDA, Policy Reporter, Tetragon, Trivy Operator).
+`external-dns`, `cert-manager`, `argo-cd`, Cilium/Hubble, EBS CSI,
+VictoriaLogs, Kyverno, Metrics Server, KEDA, Policy Reporter, Tetragon, Trivy
+Operator).
 Vector ships a PodMonitor instead.
 Both cluster workflows run
 [`kube-prometheus-stack/install-crds.sh`](kube-prometheus-stack/install-crds.sh)
@@ -93,8 +97,8 @@ Grafana files the add-ons that cluster installs into folders when its pod
 starts ([`kube-prometheus-stack/dashboards-values.yaml`](kube-prometheus-stack/dashboards-values.yaml)).
 The chart's own Kubernetes dashboards go in **Admin**. Both clusters get
 **Network** (external-dns, and the demo's NGINX board), **Security**
-(cert-manager, Kyverno, Trivy Operator), and **DevOps** (Argo CD, Loki,
-Vector, and the demo's application boards). The demo's Linux board goes in
+(cert-manager, Kyverno, Trivy Operator), and **DevOps** (Argo CD,
+VictoriaLogs, Vector, and the demo's application boards). The demo's Linux board goes in
 **Admin** with the node dashboards. The standard cluster also gets the
 ingress-nginx dashboards; the Cilium cluster gets Cilium, Hubble, and
 Tetragon instead. The download runs from the Grafana init container, so the
@@ -129,7 +133,7 @@ objects are installed and not applied there.
 | Prometheus | `prometheus.networkPolicy` (`flavor`) | CiliumNetworkPolicy | NetworkPolicy |
 | Prometheus Operator | `prometheusOperator.networkPolicy` (`flavor`) | CiliumNetworkPolicy | NetworkPolicy |
 | kube-state-metrics | `kube-state-metrics.networkPolicy` | NetworkPolicy | NetworkPolicy |
-| Loki | `networkPolicy` | NetworkPolicy | NetworkPolicy |
+| VictoriaLogs | `networkPolicy` | NetworkPolicy | NetworkPolicy |
 | KEDA (operator, metrics apiserver, webhooks) | `networkPolicy` (`flavor`) | CiliumNetworkPolicy | NetworkPolicy |
 | Alertmanager | `alertmanager.networkPolicy` | NetworkPolicy | NetworkPolicy |
 | Grafana | `grafana.networkPolicy` | NetworkPolicy | NetworkPolicy |
@@ -191,16 +195,16 @@ Ingress, so notifications, DNS, and clustering egress stay open. Default
 ingress allows Prometheus on 9093 and the reloader port 8080. The chart's
 peer rule is emitted only when `service.clusterPort` is set; it is unset
 here and the install is a single replica. `additionalIngress` opens 9093 and
-8080 with no source selector, so probes, Grafana, the Loki ruler,
-ingress-nginx, and cilium-envoy can all reach it.
+8080 with no source selector, so probes, Grafana, ingress-nginx, and
+cilium-envoy can all reach it.
 
 **Grafana.** Kubernetes NetworkPolicy only. Ingress stays at the chart
 default (`allowExternal: true`) on container port 3000, so the ingress, the
 Cilium gateway, and probes can open the UI. Egress is enabled and limited to
-the chart's DNS rule plus TCP 80, 443, 8080, 9090, 9093, and 16686. Those are
-Prometheus (9090), Alertmanager (9093), the Loki gateway (service port 80,
-container port 8080), Jaeger (16686), and 443 for the dashboard download. The download runs
-in the Grafana pod, so a 443 deny stops Grafana from starting.
+the chart's DNS rule plus TCP 443, 9090, 9093, 9428, and 16686. Those are
+Prometheus (9090), Alertmanager (9093), VictoriaLogs (9428), Jaeger (16686),
+and 443 for the dashboard and datasource-plugin downloads. Both run in the
+Grafana pod at startup, so a 443 deny stops Grafana from starting.
 
 **node-exporter.** Ingress allows port 9100 from any source. The policy type
 list includes Egress and the chart writes no egress rules, so outbound
@@ -263,58 +267,45 @@ which covers Prometheus and the gRPC call from the metrics apiserver, and
 does not cover the API server or the kubelet. The extra policies above supply
 those ports.
 
-### Loki and Vector
+### VictoriaLogs and Vector
 
-Loki comes from the grafana-community chart, which only renders Kubernetes
-NetworkPolicy (the `flavor: cilium` switch was removed in chart 15.0).
-`loki-values.yaml` enables that policy and both workflows run the same
-`./init.sh`. The chart has no MinIO subchart since 20.0, and its values
-schema rejects unknown top-level keys, so there is no `minio` block.
+VictoriaLogs replaced Loki. The distributed Loki install ran eleven
+components over two S3 buckets and an IRSA role; VictoriaLogs is one
+StatefulSet (`victorialogs-0`) on a 10Gi `gp3` volume with one day of
+retention, which is all a daily-rebuilt sandbox needs. Everything goes
+through one port, 9428: Vector pushes to the Elasticsearch bulk endpoint, the
+OpenTelemetry demo pushes OTLP, Grafana queries through the
+`victoriametrics-logs-datasource` plugin, Prometheus scrapes `/metrics`, and
+the built-in web UI is at `/select/vmui/` (port-forward
+`svc/victorialogs` in the `victorialogs` namespace). There is no ruler; log
+alerts would come from vmalert.
 
-The chart's own rules, once enabled:
+Each stored line is the raw container message (`_msg`) with the CRI
+timestamp (`_time`) plus the fields Vector sets: `namespace`, `pod`,
+`container`, `node`, `stream`, `app`, `instance`, `component`,
+`job` (`namespace/app`) and `image`. `namespace`, `app`, `pod`, `container`
+and `stream` are the stream fields, so `{namespace="kube-system"}` is a
+stream filter and `error` on its own is a full-text search; everything else
+is a `field:value` filter. The logs board
+([`kube-prometheus-stack/dashboards/victorialogs-logs.json`](kube-prometheus-stack/dashboards/victorialogs-logs.json))
+is a per-namespace browser written in LogsQL.
 
-- Same-namespace traffic: `podSelector: {}` limited to the `loki` namespace,
-  for pods labeled `app.kubernetes.io/name: loki`.
-- DNS UDP and TCP 53 to any namespace for pods labeled
-  `app.kubernetes.io/name: loki`.
-- Metrics port `http-metrics` from any source. On the gateway pod that is
-  the access-log-exporter sidecar (container 4040, Service
-  `loki-gateway-exporter`), which the chart ServiceMonitor scrapes.
-- Gateway ingress on port `http`. The gateway nginx container and the
-  `loki-gateway` Service both name that port `http` (container 8080, Service
-  80).
-- Alertmanager egress on 9093, selecting `app.kubernetes.io/component: backend`.
-  This install is `deploymentMode: Distributed` with `backend.replicas: 0`,
-  so that selector matches nothing. The ruler
-  (`app.kubernetes.io/component: ruler`) is the process that posts to
-  `http://kube-prometheus-stack-alertmanager.monitoring:9093`.
-- External storage TCP 443 with no CIDR, for every Loki-labeled pod. That
-  covers S3 and the EKS API.
-
-Four extra Kubernetes NetworkPolicies in `loki-values.yaml` apply on both
-clusters:
-
-- `loki-ruler-alertmanager`: ruler egress to Alertmanager in `monitoring` on
-  TCP 9093. Alertmanager's ingress allows that port.
-- `loki-dns-all`: every pod in the namespace (canary, memcached, Vector)
-  to CoreDNS in `kube-system` on UDP and TCP 53. The chart DNS rule only
-  selects Loki's own labels.
-- `loki-ingress-monitoring`: every pod in the namespace accepts ingress from
-  the `monitoring` namespace, so Prometheus can scrape canary and the caches
-  and Grafana can query the gateway.
-- `loki-ingress-otel-demo`: the gateway accepts TCP 8080 from the `otel-demo`
-  namespace, so the collector can push OTLP logs.
+The chart renders a Kubernetes NetworkPolicy on the VictoriaLogs pod
+(`networkPolicy` in [`victorialogs-values.yaml`](victorialogs/victorialogs-values.yaml));
+both workflows run the same `./init.sh`. Ingress on TCP 9428 from Vector in
+the same namespace, from the `monitoring` namespace (Grafana queries and the
+Prometheus scrape) and from `otel-demo` (the collector's OTLP push). Egress
+is CoreDNS in `kube-system` on UDP and TCP 53 only; VictoriaLogs dials
+nothing else.
 
 Vector's chart has no network-policy switch, so
-[`vector-values.yaml`](loki/vector-values.yaml) adds one through
-`extraObjects`. It is egress only: the Loki gateway on TCP 8080 (the push)
-and TCP 443 with no CIDR for the EKS API, which the `kubernetes_logs`
-source watches for pods, namespaces, and nodes. Log files are read from the
-node's `/var/log/pods`, not over the kubelet port. DNS comes from
-`loki-dns-all` and the Prometheus scrape of the exporter port from
-`loki-ingress-monitoring`, both of which select every pod in the namespace.
-The Vector API stays on localhost and the chart Services are off, so
-nothing else needs to reach the pods.
+[`vector-values.yaml`](victorialogs/vector-values.yaml) adds one through
+`extraObjects`. Egress: VictoriaLogs on TCP 9428 (the push), CoreDNS on 53,
+and TCP 443 with no CIDR for the EKS API, which the `kubernetes_logs` source
+watches for pods, namespaces, and nodes. Log files are read from the node's
+`/var/log/pods`, not over the kubelet port. Ingress: the Prometheus scrape of
+the exporter port 9090 from `monitoring`. The Vector API stays on localhost
+and the chart Services are off, so nothing else needs to reach the pods.
 
 ### OpenTelemetry demo
 
@@ -322,9 +313,12 @@ Chart `0.42.6`. The demo Prometheus, Grafana, and OpenSearch subcharts are
 off. The collector DaemonSet pushes metrics with OTLP to the in-cluster
 Prometheus (`enableOTLPReceiver`, with the same promoted resource attributes
 as the demo Prometheus) and pushes logs to
-`http://loki-gateway.loki.svc.cluster.local/otlp`. Jaeger stays in the demo
-namespace. Grafana gets a Jaeger datasource only when this add-on is applied,
-and Prometheus stores exemplars (`exemplar-storage`).
+`http://victorialogs.victorialogs.svc.cluster.local:9428/insert/opentelemetry/v1/logs`,
+where the resource attributes become stream fields and `trace_id` is kept as
+a field. Jaeger stays in the demo namespace. Grafana gets a Jaeger datasource
+only when this add-on is applied; its trace-to-logs link runs the LogsQL
+query `trace_id:="<trace id>"` against VictoriaLogs, and Prometheus stores
+exemplars (`exemplar-storage`).
 
 The Cilium workflow is the only one that offers this add-on. Selecting it
 passes `node_instance_types=["m6g.xlarge"]` to Terraform. The chart dashboards
@@ -332,8 +326,8 @@ are loaded with the Prometheus uid set to `prometheus` and the Jaeger uid set
 to `jaeger`. Linux is filed in **Admin**, image-provider NGINX in **Network**,
 and cart exemplars, spanmetrics, the demo board, APM, the collector, and
 PostgreSQL in **DevOps**.
-OpenSearch log panels are LogQL on the demo board and dropped where the panel
-was OpenSearch-only. The quote panel filtered `job="quote"` and is removed.
+OpenSearch log panels are dropped from the demo board. The quote panel
+filtered `job="quote"` and is removed.
 PostgreSQL queries `k8s_deployment_name` because astronomy-db is a Deployment.
 
 `init.sh` applies [`networkpolicy.yaml`](opentelemetry-demo/networkpolicy.yaml).
@@ -347,10 +341,10 @@ render a policy from it. The manifests are CiliumNetworkPolicy:
   Cilium's health checks from the `health` entity.
 - The collector (`app.kubernetes.io/name=opentelemetry-collector`) may also
   reach `cluster`, `host`, `remote-node`, and `kube-apiserver`. That covers
-  annotation discovery, the Prometheus OTLP receiver, the Loki gateway,
+  annotation discovery, the Prometheus OTLP receiver, VictoriaLogs,
   kubelet stats, and the Kubernetes attribute receiver. Prometheus already
-  accepts 9090 from any source, and the Loki gateway already accepts 8080
-  from `otel-demo`.
+  accepts 9090 from any source, and VictoriaLogs already accepts 9428 from
+  `otel-demo`.
 - Jaeger may open TCP 9090 in `monitoring` (its `PROMETHEUS_ADDR`). Grafana
   may open Jaeger TCP 16686; Grafana's own egress list already includes that
   port.
@@ -428,8 +422,9 @@ These rely on IAM Roles for Service Accounts created by
 | Add-on | Service account | AWS access |
 |--------|-----------------|------------|
 | external-dns | `external-dns` | Route 53 records |
-| loki | `loki` | S3 (chunks + ruler buckets) |
 | ebs-csi-driver | `ebs-csi-controller-sa` | EBS volume lifecycle |
+
+VictoriaLogs needs no AWS access: its volume comes through the EBS CSI driver.
 
 ## Manual install
 
