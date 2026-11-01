@@ -193,7 +193,7 @@ jobs:
 
           {
             echo "CLUSTER_NAME=$CLUSTER_NAME"
-            echo "EXTERNAL_DNS_ROLE_ARN=$(terraform output -json external_dns_role_arn | jq -r '.[0]')"
+            echo "EXTERNAL_DNS_ROLE_ARN=$(terraform output -raw external_dns_role_arn)"
             echo "EBS_CSI_ROLE_ARN=$(terraform output -raw ebs_csi_driver_role_arn)"
           } >> "$GITHUB_OUTPUT"
         working-directory: ./terraform/eks-cluster

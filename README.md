@@ -185,8 +185,7 @@ own environment there are only a few knobs:
 
 | Knob | Current value | Where to change it |
 |------|---------------|--------------------|
-| Base domain | `sctp-sandbox.com` | Hostnames in add-on values, `gateway-route.yaml` files, Kyverno host policies, and examples (find them all with `grep -rl sctp-sandbox.com`) |
-| Route53 zone | `Z00541411…` | `external_dns_hosted_zone_arns` in [terraform/eks-cluster/variables.tf](terraform/eks-cluster/variables.tf) (scopes the ExternalDNS IAM role) |
+| Base domain | `sctp-sandbox.com` | The Route53 zone lookup in [terraform/eks-cluster/data.tf](terraform/eks-cluster/data.tf) (scopes the ExternalDNS IAM role), hostnames in add-on values, `gateway-route.yaml` files, Kyverno host policies, and examples (find them all with `grep -rl sctp-sandbox.com`) |
 | Learner namespace pattern | `*-eks-activity` | [kyverno-policies/restrict-namespace-name-format.yaml](kyverno-policies/restrict-namespace-name-format.yaml) and [scripts/](scripts/) |
 | AWS account | (per fork) | `ACCOUNT_ID` GitHub Actions **variable** |
 | ACME registration email | (per fork) | `EMAIL_ADDRESS` GitHub Actions **secret** |

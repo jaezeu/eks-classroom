@@ -10,3 +10,8 @@ data "aws_iam_group" "instructor" {
 data "aws_availability_zones" "available" {
   state = "available"
 }
+
+data "aws_route53_zone" "base" {
+  name         = "sctp-sandbox.com"
+  private_zone = false
+}
