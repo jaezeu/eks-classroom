@@ -17,7 +17,7 @@ module "external_dns_role" {
 
   oidc_providers = {
     this = {
-      provider_arn = module.eks.oidc_provider_arn
+      provider_arn               = module.eks.oidc_provider_arn
       namespace_service_accounts = ["external-dns:external-dns"]
     }
   }
