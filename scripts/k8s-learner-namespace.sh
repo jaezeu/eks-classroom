@@ -80,7 +80,7 @@ while IFS= read -r user; do
     | tr '[:upper:]' '[:lower:]' \
     | sed 's/[^a-z0-9]/-/g' \
     | sed 's/^-*//;s/-*$//' \
-    | cut -c1-49)-activity
+    | cut -c1-49)-eks-activity
 
   kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f -
 done < <(printf '%s\n' "$users" | tr '\t' '\n')
